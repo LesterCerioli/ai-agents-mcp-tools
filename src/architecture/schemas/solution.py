@@ -129,3 +129,43 @@ class SolutionFlowDiagram(BaseModel):
     container_view: DiagramView
     component_view: DiagramView
     annotations: list[str] = Field(default_factory=list)
+
+
+class IssueSeverity(str, Enum):
+    BLOCKER = "blocker"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class RequirementCoverage(BaseModel):
+    dimension: str
+    covered: bool
+    coverage_notes: str = ""
+    severity: IssueSeverity = IssueSeverity.INFO
+
+
+class ArchitectureGap(BaseModel):
+    description: str
+    severity: IssueSeverity
+    dimension: str
+    recommended_correction: str
+
+
+class AntiPatternViolation(BaseModel):
+    pattern_name: str
+    description: str
+    severity: IssueSeverity
+    recommended_correction: str
+
+
+class ValidationReport(BaseModel):
+    report_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    decision_id: str
+    passed: bool
+    requirement_coverages: list[RequirementCoverage] = Field(default_factory=list)
+    gaps: list[ArchitectureGap] = Field(default_factory=list)
+    anti_pattern_violations: list[AntiPatternViolation] = Field(default_factory=list)
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    recommended_corrections: list[str] = Field(default_factory=list)
+    re_evaluation_required: bool = False
+    re_evaluation_context: str = ""
