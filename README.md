@@ -1,6 +1,6 @@
 # Enterprise AI Agents
 
-AI agents with specialized Next.js, Design, and Frontend skills, powered by open-source HuggingFace LLMs and exposed via a FastAPI REST API.
+AI agents with specialized Next.js, Design, and Frontend skills, powered by open-source Hugging Face LLMs and exposed via a FastAPI REST API.
 
 ## Overview
 
@@ -15,10 +15,105 @@ Four specialized agents collaborate through an orchestrator to handle complex fr
 
 Skills run with or without an LLM — when no token is provided, they return structured template-based output.
 
+---
+
+## Routing & Intelligence Architecture
+
+### Where the Intelligence Lives
+
+The application runs on Render's free tier (0.5 CPU / 512 MB RAM). No language model runs inside the application. All LLM inference is delegated to the **Hugging Face Inference API** via HTTP:
+
+```
+Render (this application)            Hugging Face (their infrastructure)
+┌─────────────────────────┐          ┌──────────────────────────────────┐
+│  FastAPI                │          │  Qwen2.5-Coder-7B-Instruct       │
+│  AgentOrchestrator      │──HTTP───▶│  (7B parameters)                 │
+│  Specialized Agents     │◀─────────│  running on their GPU servers    │
+│  Skills (58 total)      │          └──────────────────────────────────┘
+│  BM25 Index (~50 KB)    │
+└─────────────────────────┘
+  RAM used: ~150–200 MB
+  LLM RAM:  0 (remote)
+```
+
+The `AsyncInferenceClient` from `huggingface-hub` acts as a pure HTTP client — it sends prompts and receives generated code. The `HUGGINGFACE_TOKEN` environment variable is the only credential required.
+
+---
+
+### Skill Routing: BM25 (Zero Cost, Zero API Calls)
+
+Skill selection is handled by an **in-memory BM25 index** built at startup from the `name + description + tags` of all 58 registered skills. No LLM call is needed to decide which skill to invoke.
+
+```
+Startup
+  SkillBM25Index.build()
+    → tokenizes name + description + tags for each of the 58 skills
+    → builds BM25Okapi corpus in memory (~50 KB)
+
+Request: "create a dashboard with authentication"
+  SkillBM25Index.search(query, top_k=5)
+    → BM25 keyword scoring (local, microseconds)
+    → returns: [nextjs.auth (0.94), nextjs.generate_component (0.88), ...]
+    → no API call, no cost, deterministic
+```
+
+This design eliminates two problems with LLM-based routing:
+- **Hallucination** — the LLM could return a skill name that does not exist.
+- **Cost** — every routing decision would consume an API call before the actual code generation.
+
+---
+
+### Full Request Flow
+
+A complete orchestrated request goes through two distinct stages:
+
+```
+POST /orchestrate  { "task": "Build a SaaS dashboard with auth and dark mode" }
+
+  Stage 1 — Skill Routing (BM25, local, free)
+  ┌──────────────────────────────────────────────┐
+  │  BM25Index.search("SaaS dashboard auth ...")  │
+  │  → nextjs.auth          score: 0.94           │
+  │  → nextjs.generate_component  score: 0.88     │
+  │  → design.color_system  score: 0.71           │
+  └──────────────────────────────────────────────┘
+              ↓
+
+  Stage 2 — Code Generation (Hugging Face API, per skill)
+  ┌──────────────────────────────────────────────┐
+  │  For each matched skill:                      │
+  │    LLM.generate_code(skill_prompt)            │
+  │    → HTTP POST to Hugging Face Inference API  │
+  │    → returns production-ready TypeScript/TSX  │
+  └──────────────────────────────────────────────┘
+              ↓
+
+  Response: { artifacts: [...], dependencies: [...] }
+```
+
+| Stage | Technology | LLM calls | Cost |
+|---|---|---|---|
+| Skill routing | BM25 (local) | 0 | free |
+| Param extraction | Hugging Face API | 1 (small prompt) | API token |
+| Code generation | Hugging Face API | 1 per skill | API token |
+
+---
+
+### No-Token Mode
+
+All 58 skills include a hardcoded fallback template. When `HUGGINGFACE_TOKEN` is not set, the system still functions — routing works identically via BM25, and each skill returns a valid but generic scaffold:
+
+```
+With token     → contextual, production-ready code tailored to the task
+Without token  → generic template scaffold (compilable, not contextual)
+```
+
+---
+
 ## Requirements
 
 - Python 3.12+
-- HuggingFace account (free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+- Hugging Face account (free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
 
 ## Setup
 
@@ -108,7 +203,7 @@ POST /plan
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HUGGINGFACE_TOKEN` | — | HuggingFace API token |
+| `HUGGINGFACE_TOKEN` | — | Hugging Face API token |
 | `LLM_MODEL` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Model to use |
 | `LLM_MAX_TOKENS` | `4096` | Max output tokens |
 | `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
@@ -146,7 +241,8 @@ src/
 │   └── registry.py       # SkillRegistry — @SkillRegistry.register decorator
 ├── llm/
 │   ├── base.py           # BaseLLMProvider interface
-│   ├── huggingface.py    # HuggingFace InferenceClient implementation
+│   ├── bm25_index.py     # SkillBM25Index — in-memory BM25 skill routing
+│   ├── huggingface.py    # Hugging Face InferenceClient implementation
 │   └── prompts.py        # System prompts for each agent type
 └── api/
     └── main.py           # FastAPI app, routes, CLI entry point
