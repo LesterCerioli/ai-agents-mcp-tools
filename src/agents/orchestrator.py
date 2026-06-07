@@ -1,8 +1,7 @@
 """Multi-agent orchestrator for complex tasks."""
-import json
 from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
-from src.llm.prompts import ORCHESTRATOR_SYSTEM
+from src.llm.bm25_index import SkillBM25Index
 from .base import BaseAgent, AgentResult, AgentContext
 from .nextjs_agent import NextJSAgent
 from .design_agent import DesignAgent
@@ -36,6 +35,10 @@ class AgentOrchestrator:
             "frontend": FrontendAgent(llm=llm),
             "vercel": VercelAgent(llm=llm),
         }
+        self._bm25 = SkillBM25Index()
+        self._bm25.build(
+            {agent_name: agent.available_skills for agent_name, agent in self.agents.items()}
+        )
 
     def get_agent(self, name: str) -> BaseAgent:
         if name not in self.agents:
@@ -43,35 +46,17 @@ class AgentOrchestrator:
         return self.agents[name]
 
     async def plan(self, task: str) -> OrchestratorPlan:
-        """Use LLM to create an execution plan for a task."""
-        if not self.llm:
-            return OrchestratorPlan(analysis="No LLM — manual plan required", tasks=[])
+        """Build an execution plan via BM25 skill routing — no LLM call required."""
+        matches = self._bm25.search(task, top_k=5)
+        if not matches:
+            return OrchestratorPlan(analysis="No matching skills found.", tasks=[])
 
-        all_skills_summary = "\n".join(
-            f"  [{agent_name}] {skill['name']}: {skill['description']}"
-            for agent_name, agent in self.agents.items()
-            for skill in agent.available_skills
-        )
-
-        prompt = (
-            f"Task to decompose: {task}\n\n"
-            f"Available agent skills:\n{all_skills_summary}\n\n"
-            "Create an execution plan. Return JSON:"
-        )
-
-        response = await self.llm.chat(prompt, system_prompt=ORCHESTRATOR_SYSTEM)
-
-        try:
-            data = json.loads(response)
-            return OrchestratorPlan(
-                analysis=data.get("analysis", ""),
-                tasks=data.get("tasks", []),
-            )
-        except json.JSONDecodeError:
-            return OrchestratorPlan(
-                analysis=f"Plan: {response}",
-                tasks=[],
-            )
+        tasks = [
+            {"agent": m.agent_name, "skill": m.skill_name, "params": {}}
+            for m in matches
+        ]
+        analysis = f"BM25 matched {len(matches)} skill(s): {', '.join(m.skill_name for m in matches)}"
+        return OrchestratorPlan(analysis=analysis, tasks=tasks)
 
     async def run(self, task: str) -> "OrchestratorRunResult":
         """Execute a complex task using multiple agents."""
