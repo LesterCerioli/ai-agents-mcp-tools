@@ -1,6 +1,8 @@
 import json
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from src.architecture.agents.base import BaseArchitectureAgent
 from src.architecture.agents.extraction.clarification import ClarificationEngine
 from src.architecture.agents.extraction.keyword_extractor import KeywordExtractor
@@ -100,17 +102,20 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
         self,
         objective: str,
         context: PipelineContext | None = None,
+        record_turn: bool = True,
     ) -> ArchitectureRequirements:
         """Parse a natural language business objective into structured requirements.
 
         Args:
             objective: Raw business objective text from the user.
             context: Optional pipeline context for session tracking and history.
+            record_turn: Whether to append a user turn to conversation history.
+                Set to False when called from run() to avoid double-recording.
 
         Returns:
             Validated ArchitectureRequirements with confidence scores and clarification questions.
         """
-        if context:
+        if context and record_turn:
             context.add_turn("user", objective)
 
         raw_data = await self._extract(objective, context)
@@ -174,7 +179,7 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
             None,
         )
         if last_user_input:
-            await self.parse(last_user_input, context)
+            await self.parse(last_user_input, context, record_turn=False)
         return context
 
     async def _extract(self, text: str, context: PipelineContext | None) -> dict[str, Any]:
@@ -198,13 +203,13 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
         try:
             response = await self.llm.chat(prompt, system_prompt=self.system_prompt)  # type: ignore[union-attr]
             return json.loads(response)
-        except (json.JSONDecodeError, Exception):
+        except json.JSONDecodeError:
             return self._extractor.extract(text)
 
     def _build_requirements(self, raw_input: str, data: dict[str, Any]) -> ArchitectureRequirements:
         try:
             return ArchitectureRequirements(raw_input=raw_input, **data)
-        except Exception:
+        except (ValidationError, TypeError, KeyError):
             fallback = self._extractor.extract(raw_input)
             return ArchitectureRequirements(raw_input=raw_input, **fallback)
 
@@ -228,7 +233,7 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
                 pri_dim.status == SpecificationStatus.SPECIFIED
                 and (
                     cur_dim.status != SpecificationStatus.SPECIFIED
-                    or pri_dim.confidence > cur_dim.confidence
+                    or pri_dim.confidence >= cur_dim.confidence
                 )
             )
             updates[dim] = pri_dim if prior_is_better else cur_dim
