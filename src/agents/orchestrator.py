@@ -7,6 +7,7 @@ from .nextjs_agent import NextJSAgent
 from .design_agent import DesignAgent
 from .frontend_agent import FrontendAgent
 from .vercel_agent import VercelAgent
+from .backend_agent import BackendAgent
 
 if TYPE_CHECKING:
     from src.llm.base import BaseLLMProvider
@@ -34,6 +35,7 @@ class AgentOrchestrator:
             "design": DesignAgent(llm=llm),
             "frontend": FrontendAgent(llm=llm),
             "vercel": VercelAgent(llm=llm),
+            "backend": BackendAgent(llm=llm),
         }
         self._bm25 = SkillBM25Index()
         self._bm25.build(

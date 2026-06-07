@@ -6,6 +6,7 @@ from .nextjs import components, routing, data_fetching, server_actions, auth, op
 from .design import tailwind, shadcn, color_system, typography, layout, accessibility, animations, design_system
 from .frontend import state_management, forms, data_fetching as fe_data_fetching, performance, testing, i18n, error_handling
 from .vercel import deployment, environment, edge_config, analytics
+from .backend import fastapi_endpoint, sqlalchemy_model, repository_pattern, design_patterns, docker_setup, pytest_suite
 
 __all__ = [
     "BaseSkill",

@@ -1,4 +1,4 @@
-"""FastAPI application — REST API for the agent system."""
+"""FastAPI application — REST API and MCP servers for the enterprise agent system."""
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -15,6 +15,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 _orchestrator = None
+_workflow_coordinator = None
 _architecture_sessions: dict[str, Any] = {}
 _session_locks: dict[str, asyncio.Lock] = {}
 _sessions_creation_lock = asyncio.Lock()
@@ -34,24 +35,30 @@ async def _get_or_create_session(session_id: str | None, pipeline_context_cls: t
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _orchestrator
+    global _orchestrator, _workflow_coordinator
     from src.llm.huggingface import HuggingFaceProvider
     from src.agents.orchestrator import AgentOrchestrator
+    from src.architecture.workflow_coordinator import WorkflowCoordinator
 
     token = os.getenv("HUGGINGFACE_TOKEN")
     model = os.getenv("LLM_MODEL")
 
     llm = HuggingFaceProvider(token=token, model=model) if token else None
     _orchestrator = AgentOrchestrator(llm=llm)
+    _workflow_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=llm)
 
     print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
+    print(f"✓ MCP servers mounted at /mcp/backend, /mcp/frontend, /mcp/orchestrate")
     yield
 
 
 app = FastAPI(
     title="Enterprise AI Agents",
-    description="AI Agents with specialized Next.js, Design, and Frontend skills",
-    version="0.1.0",
+    description=(
+        "AI Agents with specialized Next.js, Design, Frontend, Vercel, and Backend skills. "
+        "Full workflow orchestration via REST API and MCP servers."
+    ),
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -62,6 +69,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Request/response models ───────────────────────────────────────────────────
 
 class SkillRequest(BaseModel):
     agent: str
@@ -84,10 +94,40 @@ class SkillResultResponse(BaseModel):
     error: str | None = None
 
 
+class ArchitectureParseRequest(BaseModel):
+    objective: str
+    session_id: str | None = None
+
+
+class ArchitectureClarifyRequest(BaseModel):
+    session_id: str
+    answer: str
+
+
+class ArchitectureRequirementsResponse(BaseModel):
+    session_id: str
+    requirements: dict[str, Any]
+    overall_confidence: float
+    is_complete: bool
+    clarification_questions: list[str]
+
+
+class ArchitectureRunRequest(BaseModel):
+    session_id: str
+    scope: str = "fullstack"
+
+
+class WorkflowRunRequest(BaseModel):
+    objective: str
+    scope: str = "fullstack"
+    session_id: str | None = None
+
+
+# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.1.0"}
+    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.2.0"}
 
 
 @app.get("/health", tags=["Health"])
@@ -97,12 +137,14 @@ async def health():
         "status": "healthy",
         "skills_registered": len(SkillRegistry.names()),
         "llm_enabled": _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
+        "mcp_servers": ["/mcp/backend", "/mcp/frontend", "/mcp/orchestrate"],
     }
 
 
+# ── Skills & Agents ───────────────────────────────────────────────────────────
+
 @app.get("/skills", tags=["Skills"])
 async def list_skills(agent: str | None = None, category: str | None = None, tag: str | None = None):
-    
     from src.skills.registry import SkillRegistry
     from src.skills.base import SkillCategory
 
@@ -126,7 +168,6 @@ async def list_skills(agent: str | None = None, category: str | None = None, tag
 
 @app.get("/agents", tags=["Agents"])
 async def list_agents():
-    
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
     return {
@@ -142,9 +183,10 @@ async def list_agents():
     }
 
 
+# ── Skill execution ───────────────────────────────────────────────────────────
+
 @app.post("/skills/execute", response_model=SkillResultResponse, tags=["Skills"])
 async def execute_skill(request: SkillRequest):
-    
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
 
@@ -175,7 +217,6 @@ async def execute_skill(request: SkillRequest):
 
 @app.post("/orchestrate", tags=["Orchestration"])
 async def orchestrate(request: OrchestrateRequest):
-    
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
 
@@ -196,34 +237,14 @@ async def orchestrate(request: OrchestrateRequest):
 
 @app.post("/plan", tags=["Orchestration"])
 async def create_plan(request: OrchestrateRequest):
-    
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
 
     plan = await _orchestrator.plan(request.task)
-    return {
-        "analysis": plan.analysis,
-        "tasks": plan.tasks,
-    }
+    return {"analysis": plan.analysis, "tasks": plan.tasks}
 
 
-class ArchitectureParseRequest(BaseModel):
-    objective: str
-    session_id: str | None = None
-
-
-class ArchitectureClarifyRequest(BaseModel):
-    session_id: str
-    answer: str
-
-
-class ArchitectureRequirementsResponse(BaseModel):
-    session_id: str
-    requirements: dict[str, Any]
-    overall_confidence: float
-    is_complete: bool
-    clarification_questions: list[str]
-
+# ── Solution Architecture pipeline ────────────────────────────────────────────
 
 @app.post("/architecture/parse", response_model=ArchitectureRequirementsResponse, tags=["Solution Architecture"])
 async def architecture_parse(request: ArchitectureParseRequest):
@@ -292,8 +313,165 @@ async def architecture_session(session_id: str):
         "session_id": context.session_id,
         "turn_count": context.turn_count(),
         "is_ready_for_next_stage": context.is_ready_for_next_stage(),
+        "has_decision": context.decision is not None,
+        "has_system_design": context.system_design is not None,
         "requirements": context.requirements.model_dump() if context.requirements else None,
     }
+
+
+@app.post("/architecture/run", tags=["Solution Architecture"])
+async def architecture_run(request: ArchitectureRunRequest):
+    """
+    Run the full architecture pipeline (decision → diagram → validation → design partner)
+    for an existing session. Returns the SystemDesignOutput without generating code.
+    """
+    if not _workflow_coordinator:
+        raise HTTPException(503, "Service not initialized")
+
+    if request.session_id not in _architecture_sessions:
+        raise HTTPException(404, f"Session '{request.session_id}' not found. Call /architecture/parse first.")
+
+    from src.architecture.schemas.workflow import WorkflowScope
+    try:
+        scope = WorkflowScope(request.scope)
+    except ValueError:
+        raise HTTPException(400, f"Invalid scope '{request.scope}'. Valid: backend, frontend, fullstack")
+
+    ctx = _architecture_sessions[request.session_id]
+    lock = _session_locks[request.session_id]
+
+    async with lock:
+        output = await _workflow_coordinator.run(
+            objective="",
+            scope=scope,
+            session_id=request.session_id,
+            existing_context=ctx,
+        )
+
+    return {
+        "session_id": output.session_id,
+        "architecture_pattern": output.architecture_pattern,
+        "system_design_summary": output.system_design_summary,
+        "confidence": output.confidence,
+        "backend_artifacts_count": len(output.backend_artifacts),
+        "frontend_artifacts_count": len(output.frontend_artifacts),
+        "has_integration_contracts": output.integration_contracts is not None,
+    }
+
+
+# ── Full workflow ─────────────────────────────────────────────────────────────
+
+@app.post("/workflow/run", tags=["Workflow"])
+async def workflow_run(request: WorkflowRunRequest):
+    """
+    End-to-end workflow: objective → architecture → backend/frontend code → contracts.
+
+    This is the primary entry point for full project scaffolding.
+    """
+    if not _workflow_coordinator:
+        raise HTTPException(503, "Service not initialized")
+
+    from src.architecture.schemas.workflow import WorkflowScope
+    try:
+        scope = WorkflowScope(request.scope)
+    except ValueError:
+        raise HTTPException(400, f"Invalid scope '{request.scope}'. Valid: backend, frontend, fullstack")
+
+    existing_ctx = _architecture_sessions.get(request.session_id) if request.session_id else None
+
+    try:
+        output = await _workflow_coordinator.run(
+            objective=request.objective,
+            scope=scope,
+            session_id=request.session_id,
+            existing_context=existing_ctx,
+        )
+    except Exception as e:
+        logger.exception("Workflow run failed")
+        raise HTTPException(500, f"Workflow failed: {e}") from e
+
+    _architecture_sessions[output.session_id] = existing_ctx or {}
+
+    return {
+        "workflow_id": output.workflow_id,
+        "session_id": output.session_id,
+        "scope": output.scope.value,
+        "architecture_pattern": output.architecture_pattern,
+        "system_design_summary": output.system_design_summary,
+        "summary": output.summary,
+        "confidence": output.confidence,
+        "backend_artifacts": [
+            {"filename": a.filename, "language": a.language, "description": a.description}
+            for a in output.backend_artifacts
+        ],
+        "frontend_artifacts": [
+            {"filename": a.filename, "language": a.language, "description": a.description}
+            for a in output.frontend_artifacts
+        ],
+        "integration_contracts": {
+            "openapi_stub": output.integration_contracts.openapi_stub,
+            "typescript_types": output.integration_contracts.typescript_types,
+            "pydantic_schemas": output.integration_contracts.pydantic_schemas,
+        } if output.integration_contracts else None,
+        "all_dependencies": output.all_dependencies,
+    }
+
+
+@app.get("/workflow/{session_id}", tags=["Workflow"])
+async def workflow_status(session_id: str):
+    """Return the status and artifacts for a completed or in-progress workflow session."""
+    ctx = _architecture_sessions.get(session_id)
+    if ctx is None:
+        raise HTTPException(404, f"Workflow session '{session_id}' not found.")
+
+    if not hasattr(ctx, "workflow_output"):
+        return {"session_id": session_id, "status": "in_progress"}
+
+    wo = ctx.workflow_output
+    if wo is None:
+        return {
+            "session_id": session_id,
+            "status": "architecture_only",
+            "has_decision": ctx.decision is not None,
+            "has_system_design": ctx.system_design is not None,
+        }
+
+    return {
+        "session_id": session_id,
+        "status": "completed",
+        "workflow_id": wo.workflow_id,
+        "architecture_pattern": wo.architecture_pattern,
+        "summary": wo.summary,
+        "confidence": wo.confidence,
+        "backend_artifacts_count": len(wo.backend_artifacts),
+        "frontend_artifacts_count": len(wo.frontend_artifacts),
+        "has_integration_contracts": wo.integration_contracts is not None,
+    }
+
+
+# ── MCP server mounts ─────────────────────────────────────────────────────────
+# Mounted lazily after lifespan initializes agents and coordinator.
+# We use app.router.add_event_handler to defer mounting until startup completes.
+
+@app.on_event("startup")
+async def mount_mcp_servers():
+    """Mount the three MCP SSE servers once agents are ready."""
+    if _orchestrator is None or _workflow_coordinator is None:
+        return
+
+    from src.mcp.backend_mcp import BackendMCPServer
+    from src.mcp.frontend_mcp import FrontendMCPServer
+    from src.mcp.orchestrator_mcp import OrchestratorMCPServer
+
+    backend_server = BackendMCPServer(_orchestrator.agents["backend"])
+    frontend_server = FrontendMCPServer(_orchestrator)
+    orchestrator_server = OrchestratorMCPServer(
+        _workflow_coordinator, _orchestrator, _architecture_sessions
+    )
+
+    app.mount("/mcp/backend", backend_server.sse_app())
+    app.mount("/mcp/frontend", frontend_server.sse_app())
+    app.mount("/mcp/orchestrate", orchestrator_server.sse_app())
 
 
 def cli():
