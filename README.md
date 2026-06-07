@@ -1,6 +1,6 @@
 # Enterprise AI Agents
 
-AI agents with specialized Next.js, Design, and Frontend skills, powered by open-source HuggingFace LLMs and exposed via a FastAPI REST API.
+AI agents with specialized Next.js, Design, and Frontend skills, powered by open-source Hugging Face LLMs and exposed via a FastAPI REST API.
 
 ## Overview
 
@@ -21,10 +21,10 @@ Skills run with or without an LLM — when no token is provided, they return str
 
 ### Where the Intelligence Lives
 
-The application runs on Render's free tier (0.5 CPU / 512 MB RAM). No language model runs inside the application. All LLM inference is delegated to the **HuggingFace Inference API** via HTTP:
+The application runs on Render's free tier (0.5 CPU / 512 MB RAM). No language model runs inside the application. All LLM inference is delegated to the **Hugging Face Inference API** via HTTP:
 
 ```
-Render (this application)            HuggingFace (their infrastructure)
+Render (this application)            Hugging Face (their infrastructure)
 ┌─────────────────────────┐          ┌──────────────────────────────────┐
 │  FastAPI                │          │  Qwen2.5-Coder-7B-Instruct       │
 │  AgentOrchestrator      │──HTTP───▶│  (7B parameters)                 │
@@ -79,11 +79,11 @@ POST /orchestrate  { "task": "Build a SaaS dashboard with auth and dark mode" }
   └──────────────────────────────────────────────┘
               ↓
 
-  Stage 2 — Code Generation (HuggingFace API, per skill)
+  Stage 2 — Code Generation (Hugging Face API, per skill)
   ┌──────────────────────────────────────────────┐
   │  For each matched skill:                      │
   │    LLM.generate_code(skill_prompt)            │
-  │    → HTTP POST to HuggingFace Inference API   │
+  │    → HTTP POST to Hugging Face Inference API  │
   │    → returns production-ready TypeScript/TSX  │
   └──────────────────────────────────────────────┘
               ↓
@@ -94,8 +94,8 @@ POST /orchestrate  { "task": "Build a SaaS dashboard with auth and dark mode" }
 | Stage | Technology | LLM calls | Cost |
 |---|---|---|---|
 | Skill routing | BM25 (local) | 0 | free |
-| Param extraction | HuggingFace API | 1 (small prompt) | API token |
-| Code generation | HuggingFace API | 1 per skill | API token |
+| Param extraction | Hugging Face API | 1 (small prompt) | API token |
+| Code generation | Hugging Face API | 1 per skill | API token |
 
 ---
 
@@ -113,7 +113,7 @@ Without token  → generic template scaffold (compilable, not contextual)
 ## Requirements
 
 - Python 3.12+
-- HuggingFace account (free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+- Hugging Face account (free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
 
 ## Setup
 
@@ -203,7 +203,7 @@ POST /plan
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HUGGINGFACE_TOKEN` | — | HuggingFace API token |
+| `HUGGINGFACE_TOKEN` | — | Hugging Face API token |
 | `LLM_MODEL` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Model to use |
 | `LLM_MAX_TOKENS` | `4096` | Max output tokens |
 | `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
@@ -242,7 +242,7 @@ src/
 ├── llm/
 │   ├── base.py           # BaseLLMProvider interface
 │   ├── bm25_index.py     # SkillBM25Index — in-memory BM25 skill routing
-│   ├── huggingface.py    # HuggingFace InferenceClient implementation
+│   ├── huggingface.py    # Hugging Face InferenceClient implementation
 │   └── prompts.py        # System prompts for each agent type
 └── api/
     └── main.py           # FastAPI app, routes, CLI entry point

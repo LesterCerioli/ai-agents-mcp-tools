@@ -200,7 +200,25 @@ async def test_decision_has_risk_factors_with_mitigations(engine):
 
 @pytest.mark.asyncio
 async def test_conservative_fallback_when_no_rules_match(engine):
-    req = ArchitectureRequirements(raw_input="unclear requirements", overall_confidence=0.2)
+    
+    req = ArchitectureRequirements(
+        raw_input="highly ambiguous requirements with many unknowns and diverse integrations",
+        overall_confidence=0.05,
+        integration=IntegrationRequirement(
+            status=SpecificationStatus.SPECIFIED,
+            external_systems=["Slack", "Jira", "Confluence", "Zoom"],
+            confidence=0.4,
+        ),
+    )
     decision = await engine.decide(req)
+
     assert decision is not None
+    assert decision.is_rule_based is False
+
     assert decision.primary_pattern is not None
+    assert decision.primary_pattern.pattern == ArchitecturePattern.LAYERED
+
+    rationale_text = (decision.rationale or "").lower()
+    assert any(kw in rationale_text for kw in ("ambigu", "conservative", "unclear", "ambiguous")), (
+        f"Expected rationale to reflect ambiguity, got: {decision.rationale!r}"
+    )

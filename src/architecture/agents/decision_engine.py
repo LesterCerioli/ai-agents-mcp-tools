@@ -1,4 +1,4 @@
-"""Solution Architecture Decision Engine — rule-based with optional LLM fallback."""
+
 import re
 from typing import TYPE_CHECKING
 
@@ -21,9 +21,6 @@ from src.architecture.schemas.solution import (
 if TYPE_CHECKING:
     pass
 
-# ---------------------------------------------------------------------------
-# Static trade-off matrices per pattern
-# ---------------------------------------------------------------------------
 
 _TRADE_OFF_MATRICES: dict[ArchitecturePattern, TradeOffMatrix] = {
     ArchitecturePattern.MICROSERVICES: TradeOffMatrix(
@@ -175,20 +172,9 @@ def _default_components(domain: str) -> list[DecisionComponent]:
     ]
 
 
-# ---------------------------------------------------------------------------
-# Decision Engine
-# ---------------------------------------------------------------------------
 
 class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
-    """
-    Evaluates ArchitectureRequirements and produces a SolutionArchitectureDecision.
-
-    Rule-based logic handles clear-cut cases deterministically. When requirements
-    are ambiguous (overall_confidence < 0.5 and no LLM available), the engine
-    defaults to a conservative LAYERED strategy with appropriate rationale.
-    When an LLM is configured, ambiguous cases are escalated to it.
-    """
-
+    
     name = "solution_architecture_decision_engine"
     description = (
         "Evaluates structured architecture requirements and selects the optimal "
@@ -215,10 +201,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
         context.decision = await self.decide(context.requirements)
         return context
 
-    # ------------------------------------------------------------------
-    # Rule engine
-    # ------------------------------------------------------------------
-
+    
     def _rule_based_decide(
         self, req: ArchitectureRequirements
     ) -> SolutionArchitectureDecision | None:
@@ -250,7 +233,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
                 drivers=drivers, risks=risks, req=req, is_rule_based=True,
             )
 
-        # Rule 2: strict compliance + small team → MONOLITH (auditable, simple)
+        
         if strict_compliance and small_team:
             drivers.append(ArchitecturalDriver(driver="Strict regulatory compliance with limited engineering capacity", weight=0.9, source_dimension="compliance+team_size"))
             risks.append(RiskFactor(risk="Monolith may become a bottleneck at scale", severity="low", mitigation="Design with modular boundaries for future extraction"))
@@ -265,7 +248,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
                 drivers=drivers, risks=risks, req=req, is_rule_based=True,
             )
 
-        # Rule 3: startup + small team → MONOLITH or SERVERLESS
+        
         if startup and small_team:
             drivers.append(ArchitecturalDriver(driver="Speed-to-market and cost efficiency for early-stage product", weight=0.85, source_dimension="budget+team_size"))
             risks.append(RiskFactor(risk="Technical debt accumulation in monolith", severity="low", mitigation="Enforce module boundaries from day one"))
@@ -275,17 +258,25 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
                 if primary == ArchitecturePattern.SERVERLESS
                 else "Monolith enables fast iteration with a small team on a constrained budget."
             )
+            # Build alternatives excluding the selected primary to avoid duplicates.
+            if primary == ArchitecturePattern.SERVERLESS:
+                alternatives = [
+                    _make_pattern(ArchitecturePattern.MONOLITH, "Monolith offers predictable costs and full control.", 0.70, ["Scale ceiling"]),
+                    _make_pattern(ArchitecturePattern.LAYERED, "Layered adds structure with minimal overhead.", 0.55, ["May feel over-engineered for MVP"]),
+                ]
+            else:
+                alternatives = [
+                    _make_pattern(ArchitecturePattern.SERVERLESS, "Serverless eliminates infrastructure management for low-scale workloads.", 0.70, ["Vendor lock-in", "Cold starts"]),
+                    _make_pattern(ArchitecturePattern.LAYERED, "Layered adds structure with minimal overhead.", 0.55, ["May feel over-engineered for MVP"]),
+                ]
             return self._build_decision(
                 domain=domain,
                 primary=_make_pattern(primary, primary_rationale, 0.85, ["Vendor lock-in (serverless)", "Scale ceiling (monolith)"], True),
-                alternatives=[
-                    _make_pattern(ArchitecturePattern.MONOLITH, "Monolith offers predictable costs and full control.", 0.70, ["Scale ceiling"]),
-                    _make_pattern(ArchitecturePattern.LAYERED, "Layered adds structure with minimal overhead.", 0.55, ["May feel over-engineered for MVP"]),
-                ],
+                alternatives=alternatives,
                 drivers=drivers, risks=risks, req=req, is_rule_based=True,
             )
 
-        # Rule 4: enterprise + high availability + many integrations → MICROSERVICES
+        
         if high_availability and many_integrations and not startup:
             drivers.append(ArchitecturalDriver(driver="High availability SLA with multiple external system integrations", weight=0.9, source_dimension="availability+integration"))
             risks.append(RiskFactor(risk="Distributed tracing and observability overhead", severity="medium", mitigation="Adopt OpenTelemetry and a centralized observability platform"))
@@ -300,7 +291,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
                 drivers=drivers, risks=risks, req=req, is_rule_based=True,
             )
 
-        # Rule 5: high scale only (no events, no compliance) → MICROSERVICES
+        
         if high_scale and not strict_compliance and not startup:
             drivers.append(ArchitecturalDriver(driver="Large user base requiring independent service scaling", weight=0.88, source_dimension="scalability"))
             risks.append(RiskFactor(risk="Inter-service communication latency", severity="medium", mitigation="Use async messaging for non-critical paths; gRPC for low-latency sync calls"))
@@ -314,7 +305,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
                 drivers=drivers, risks=risks, req=req, is_rule_based=True,
             )
 
-        # Rule 6: moderate requirements, no strong signals → LAYERED
+        
         if not high_scale and not strict_compliance and not many_integrations:
             drivers.append(ArchitecturalDriver(driver="Balanced requirements without dominant constraints", weight=0.75, source_dimension="overall"))
             risks.append(RiskFactor(risk="Layer coupling may hinder future refactoring", severity="low", mitigation="Enforce dependency rules with linting (e.g. ArchUnit)"))
@@ -385,10 +376,7 @@ class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
         except Exception:
             return self._conservative_fallback(req)
 
-    # ------------------------------------------------------------------
-    # Builder
-    # ------------------------------------------------------------------
-
+    
     def _build_decision(
         self,
         domain: str,

@@ -18,9 +18,6 @@ def agent() -> SolutionFlowDiagramAgent:
     return SolutionFlowDiagramAgent(llm=None)
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _comp(
     name: str,
@@ -55,9 +52,6 @@ def _assert_all_nodes_have_metadata(diagram: SolutionFlowDiagram) -> None:
         assert node.responsibility
 
 
-# ---------------------------------------------------------------------------
-# Scenario 1 — E-commerce microservices
-# ---------------------------------------------------------------------------
 
 ECOMMERCE_DECISION = SolutionArchitectureDecision(
     decision_id="ecom-001",
@@ -157,9 +151,6 @@ class TestEcommerceScenario:
         assert d1.component_view.mermaid == d2.component_view.mermaid
 
 
-# ---------------------------------------------------------------------------
-# Scenario 2 — Healthcare monolith
-# ---------------------------------------------------------------------------
 
 HEALTHCARE_DECISION = SolutionArchitectureDecision(
     decision_id="health-001",
@@ -226,9 +217,6 @@ class TestHealthcareScenario:
         assert d1.component_view.mermaid == d2.component_view.mermaid
 
 
-# ---------------------------------------------------------------------------
-# Scenario 3 — IoT event-driven
-# ---------------------------------------------------------------------------
 
 IOT_DECISION = SolutionArchitectureDecision(
     decision_id="iot-001",
@@ -291,9 +279,6 @@ class TestIoTScenario:
         assert d1.container_view.mermaid == d2.container_view.mermaid
 
 
-# ---------------------------------------------------------------------------
-# Scenario 4 — SaaS CQRS multi-tenant CRM
-# ---------------------------------------------------------------------------
 
 SAAS_DECISION = SolutionArchitectureDecision(
     decision_id="saas-001",
@@ -355,9 +340,6 @@ class TestSaasScenario:
         assert d1.annotations == d2.annotations
 
 
-# ---------------------------------------------------------------------------
-# Scenario 5 — Startup serverless
-# ---------------------------------------------------------------------------
 
 SERVERLESS_DECISION = SolutionArchitectureDecision(
     decision_id="startup-001",
@@ -417,9 +399,6 @@ class TestServerlessStartupScenario:
         assert d1.container_view.mermaid == d2.container_view.mermaid
 
 
-# ---------------------------------------------------------------------------
-# Schema integrity tests (cross-scenario)
-# ---------------------------------------------------------------------------
 
 class TestDiagramSchemaIntegrity:
     @pytest.mark.parametrize("decision", [
@@ -476,3 +455,46 @@ class TestDiagramSchemaIntegrity:
                 assert len(node.technology_hints) > 0, (
                     f"Node '{node.label}' missing technology hints"
                 )
+
+
+
+NO_EXTERNAL_DECISION = SolutionArchitectureDecision(
+    decision_id="no-ext-001",
+    domain="internal-tool",
+    patterns=[
+        _pattern(ArchitecturePattern.LAYERED, "Simple internal tool with no external dependencies"),
+    ],
+    components=[
+        _comp("Web UI", ComponentType.CLIENT, ArchitectureLayer.PRESENTATION,
+              "Internal admin interface", ["React"], ["HTTP/REST"]),
+        _comp("App Service", ComponentType.SERVICE, ArchitectureLayer.DOMAIN,
+              "Business logic", ["FastAPI"], ["HTTP/REST"]),
+        _comp("App DB", ComponentType.DATABASE, ArchitectureLayer.INFRASTRUCTURE,
+              "Persistent storage", ["PostgreSQL"], ["TCP"]),
+    ],
+    external_integrations=[],
+)
+
+
+class TestNoExternalIntegrationsScenario:
+    def test_context_view_has_no_external_nodes(self, agent: SolutionFlowDiagramAgent):
+        diagram = agent.generate(NO_EXTERNAL_DECISION)
+        external_nodes = [n for n in diagram.context_view.nodes if n.type == ComponentType.EXTERNAL]
+        assert external_nodes == [], "context_view must not contain EXTERNAL nodes when there are no external integrations"
+
+    def test_container_view_is_valid_mermaid(self, agent: SolutionFlowDiagramAgent):
+        diagram = agent.generate(NO_EXTERNAL_DECISION)
+        assert diagram.container_view.mermaid.startswith("graph")
+        assert "EXTERNAL" not in diagram.container_view.mermaid
+
+    def test_annotations_omit_external_integrations_line(self, agent: SolutionFlowDiagramAgent):
+        diagram = agent.generate(NO_EXTERNAL_DECISION)
+        assert not any(
+            "External integrations:" in ann for ann in diagram.annotations
+        ), "annotations must not include external integrations line when list is empty"
+
+    def test_all_views_populated(self, agent: SolutionFlowDiagramAgent):
+        diagram = agent.generate(NO_EXTERNAL_DECISION)
+        _assert_view_populated(diagram.context_view)
+        _assert_view_populated(diagram.container_view)
+        _assert_view_populated(diagram.component_view)

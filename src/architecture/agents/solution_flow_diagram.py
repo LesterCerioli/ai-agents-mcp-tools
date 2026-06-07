@@ -75,6 +75,9 @@ class SolutionFlowDiagramAgent(BaseArchitectureAgent):
         )
 
     async def run(self, context: PipelineContext) -> PipelineContext:
+        if context.decision is None:
+            return context
+        context.diagram = self.generate(context.decision)
         return context
 
     
