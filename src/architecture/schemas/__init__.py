@@ -9,6 +9,22 @@ from .requirements import (
     SpecificationStatus,
     TeamSizeSignal,
 )
+from .solution import (
+    ArchitecturalDriver,
+    ArchitectureLayer,
+    ArchitecturePattern,
+    ComponentType,
+    DecisionComponent,
+    DiagramEdge,
+    DiagramNode,
+    DiagramView,
+    RiskFactor,
+    SolutionArchitectureDecision,
+    SolutionFlowDiagram,
+    SolutionPattern,
+    TradeOffMatrix,
+    TradeOffRating,
+)
 
 __all__ = [
     "ArchitectureRequirements",
@@ -20,4 +36,18 @@ __all__ = [
     "ScalabilityRequirement",
     "SpecificationStatus",
     "TeamSizeSignal",
+    "ArchitecturalDriver",
+    "ArchitectureLayer",
+    "ArchitecturePattern",
+    "ComponentType",
+    "DecisionComponent",
+    "DiagramEdge",
+    "DiagramNode",
+    "DiagramView",
+    "RiskFactor",
+    "SolutionArchitectureDecision",
+    "SolutionFlowDiagram",
+    "SolutionPattern",
+    "TradeOffMatrix",
+    "TradeOffRating",
 ]
