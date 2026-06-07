@@ -1,4 +1,6 @@
 """FastAPI application — REST API for the agent system."""
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import Any
 import os
@@ -10,9 +12,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
 
 _orchestrator = None
 _architecture_sessions: dict[str, Any] = {}
+_session_locks: dict[str, asyncio.Lock] = {}
+_sessions_creation_lock = asyncio.Lock()
+
+
+async def _get_or_create_session(session_id: str | None, pipeline_context_cls: type) -> tuple[str, asyncio.Lock]:
+    """Return (session_id, per-session lock), creating a new entry atomically if needed."""
+    async with _sessions_creation_lock:
+        if session_id and session_id in _architecture_sessions:
+            return session_id, _session_locks[session_id]
+        ctx = pipeline_context_cls()
+        sid = ctx.session_id
+        _architecture_sessions[sid] = ctx
+        _session_locks[sid] = asyncio.Lock()
+        return sid, _session_locks[sid]
 
 
 @asynccontextmanager
@@ -216,16 +233,15 @@ async def architecture_parse(request: ArchitectureParseRequest):
     llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
     agent = BusinessObjectiveParserAgent(llm=llm)
 
-    if request.session_id and request.session_id in _architecture_sessions:
-        context = _architecture_sessions[request.session_id]
-    else:
-        context = PipelineContext()
-        _architecture_sessions[context.session_id] = context
+    session_id, lock = await _get_or_create_session(request.session_id, PipelineContext)
 
-    try:
-        requirements = await agent.parse(request.objective, context)
-    except Exception as e:
-        raise HTTPException(500, f"Parsing failed: {e}")
+    async with lock:
+        context = _architecture_sessions[session_id]
+        try:
+            requirements = await agent.parse(request.objective, context)
+        except Exception as e:
+            logger.exception("Architecture parse failed", extra={"session_id": session_id})
+            raise HTTPException(500, "Parsing failed") from e
 
     return ArchitectureRequirementsResponse(
         session_id=context.session_id,
@@ -243,16 +259,19 @@ async def architecture_clarify(request: ArchitectureClarifyRequest):
     if request.session_id not in _architecture_sessions:
         raise HTTPException(404, f"Session '{request.session_id}' not found. Call /architecture/parse first.")
 
-    context = _architecture_sessions[request.session_id]
+    lock = _session_locks[request.session_id]
     llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
     agent = BusinessObjectiveParserAgent(llm=llm)
 
-    try:
-        requirements = await agent.clarify(request.answer, context)
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception as e:
-        raise HTTPException(500, f"Clarification failed: {e}")
+    async with lock:
+        context = _architecture_sessions[request.session_id]
+        try:
+            requirements = await agent.clarify(request.answer, context)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        except Exception as e:
+            logger.exception("Architecture clarification failed", extra={"session_id": request.session_id})
+            raise HTTPException(500, "Clarification failed") from e
 
     return ArchitectureRequirementsResponse(
         session_id=context.session_id,

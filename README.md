@@ -213,7 +213,7 @@ The system includes a second layer of agents focused on **architecture design au
 
 ### Pipeline Overview
 
-```
+```text
 [User: Natural Language Business Objective]
         ↓
 [BusinessObjectiveParserAgent]  ← Feature #7 (implemented)
@@ -250,7 +250,7 @@ Each dimension carries a `confidence` score (0.0–1.0). Dimensions with low con
 
 ### Solution Architecture Endpoints
 
-```
+```json
 POST /architecture/parse
 {
   "objective": "Build a HIPAA-compliant telemedicine platform for 10,000 concurrent patients",
@@ -265,7 +265,7 @@ POST /architecture/parse
 }
 ```
 
-```
+```json
 POST /architecture/clarify
 {
   "session_id": "...",
@@ -274,14 +274,14 @@ POST /architecture/clarify
 → { "session_id": "...", "requirements": {...}, "overall_confidence": 0.84, ... }
 ```
 
-```
+```json
 GET /architecture/sessions/{session_id}
 → { "session_id": "...", "turn_count": 3, "is_ready_for_next_stage": true, "requirements": {...} }
 ```
 
 ### Architecture Module Structure
 
-```
+```text
 src/architecture/
 ├── schemas/
 │   └── requirements.py       # ArchitectureRequirements + 7 dimension Pydantic models

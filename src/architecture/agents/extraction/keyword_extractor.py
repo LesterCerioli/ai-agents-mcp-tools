@@ -204,9 +204,9 @@ class KeywordExtractor:
             re.search(r"\bfault[- ]tolerant\b|\bresilient\b|\bdisaster\s*recovery\b", text, re.IGNORECASE)
         )
 
-        if "target_uptime" in result:
+        if any(k in result for k in ("target_uptime", "rto", "rpo")):
             result["status"] = "specified"
-            result["confidence"] = 0.85
+            result["confidence"] = 0.85 if "target_uptime" in result else 0.75
         elif has_signal:
             result["status"] = "ambiguous"
             result["confidence"] = 0.5
@@ -262,13 +262,13 @@ class KeywordExtractor:
         ]
         real_time = bool(re.search(r"\breal[- ]time\b|\bwebsockets?\b|\blive\s*(?:updates?|data)\b", text, re.IGNORECASE))
 
-        if systems or patterns_found:
+        if systems or patterns_found or real_time:
             return {
-                "status": "specified",
+                "status": "specified" if (systems or patterns_found) else "ambiguous",
                 "external_systems": systems,
                 "integration_patterns": patterns_found,
                 "real_time": real_time if real_time else None,
-                "confidence": 0.8 if systems else 0.6,
+                "confidence": 0.8 if systems else (0.6 if patterns_found else 0.5),
             }
         return {
             "status": "not_specified",
