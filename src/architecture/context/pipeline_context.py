@@ -6,6 +6,8 @@ from src.architecture.schemas.requirements import ArchitectureRequirements
 
 if TYPE_CHECKING:
     from src.architecture.schemas.solution import SolutionArchitectureDecision, SolutionFlowDiagram
+    from src.architecture.schemas.system_design import SystemDesignOutput
+    from src.architecture.schemas.workflow import WorkflowOutput, WorkflowScope
 
 
 @dataclass
@@ -15,6 +17,9 @@ class PipelineContext:
     requirements: ArchitectureRequirements | None = None
     decision: "SolutionArchitectureDecision | None" = field(default=None)
     diagram: "SolutionFlowDiagram | None" = field(default=None)
+    system_design: "SystemDesignOutput | None" = field(default=None)
+    execution_scope: "WorkflowScope | None" = field(default=None)
+    workflow_output: "WorkflowOutput | None" = field(default=None)
     conversation_history: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
