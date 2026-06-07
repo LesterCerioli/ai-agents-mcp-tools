@@ -205,6 +205,105 @@ mypy src/
 pytest
 ```
 
+---
+
+## Solution Architecture Pipeline
+
+The system includes a second layer of agents focused on **architecture design automation**. This pipeline receives natural language business objectives and transforms them into structured architecture requirement sets that drive downstream design partner agents.
+
+### Pipeline Overview
+
+```
+[User: Natural Language Business Objective]
+        ↓
+[BusinessObjectiveParserAgent]  ← Feature #7 (implemented)
+  - Extracts 7 requirement dimensions
+  - Assigns confidence scores (0.0–1.0)
+  - Generates clarification questions for gaps
+  - Supports multi-turn clarification sessions
+        ↓
+[PipelineContext]  — shared context object
+  - Stores ArchitectureRequirements
+  - Tracks conversation history
+  - Signals readiness for next pipeline stage
+        ↓
+[Next stages — Tasks 2–5 from EPIC #1]
+  - Solution Architecture Decision Engine
+  - System Architecture Design Partners
+  - SOLID/Pattern Enforcement
+  - MCP Orchestration & REST output
+```
+
+### Requirement Dimensions Extracted
+
+| Dimension | Examples |
+|-----------|---------|
+| `scalability` | expected users, peak load, growth rate |
+| `availability` | target uptime (SLA), RTO, RPO |
+| `compliance` | GDPR, HIPAA, SOC2, PCI-DSS, ISO 27001, FERPA… |
+| `domain_boundaries` | e-commerce, fintech, healthcare, SaaS, IoT, logistics… |
+| `integration` | external systems (Stripe, Kafka…), REST/gRPC/WebSocket patterns |
+| `budget` | tier (startup/mid-market/enterprise), cloud preference, cost sensitivity |
+| `team_size` | engineering headcount range, organizational maturity |
+
+Each dimension carries a `confidence` score (0.0–1.0). Dimensions with low confidence generate targeted clarification questions.
+
+### Solution Architecture Endpoints
+
+```
+POST /architecture/parse
+{
+  "objective": "Build a HIPAA-compliant telemedicine platform for 10,000 concurrent patients",
+  "session_id": null
+}
+→ {
+  "session_id": "...",
+  "requirements": { "scalability": {...}, "compliance": {...}, ... },
+  "overall_confidence": 0.72,
+  "is_complete": true,
+  "clarification_questions": []
+}
+```
+
+```
+POST /architecture/clarify
+{
+  "session_id": "...",
+  "answer": "We need 99.9% uptime and plan to grow to 1 million users in 2 years."
+}
+→ { "session_id": "...", "requirements": {...}, "overall_confidence": 0.84, ... }
+```
+
+```
+GET /architecture/sessions/{session_id}
+→ { "session_id": "...", "turn_count": 3, "is_ready_for_next_stage": true, "requirements": {...} }
+```
+
+### Architecture Module Structure
+
+```
+src/architecture/
+├── schemas/
+│   └── requirements.py       # ArchitectureRequirements + 7 dimension Pydantic models
+├── context/
+│   └── pipeline_context.py   # PipelineContext — shared state across pipeline agents
+└── agents/
+    ├── base.py                # BaseArchitectureAgent ABC
+    ├── business_objective_parser.py  # BusinessObjectiveParserAgent (parse + clarify)
+    └── extraction/
+        ├── keyword_extractor.py  # Rule-based extraction (LLM fallback)
+        └── clarification.py      # ClarificationEngine — generates targeted questions
+
+tests/architecture/
+└── test_business_objective_parser.py  # 71 tests across 12 scenarios
+```
+
+### Running the Tests
+
+```bash
+pytest tests/architecture/ -v
+```
+
 ## License
 
 MIT
