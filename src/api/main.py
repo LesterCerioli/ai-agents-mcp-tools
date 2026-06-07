@@ -12,6 +12,7 @@ load_dotenv()
 
 
 _orchestrator = None
+_architecture_sessions: dict[str, Any] = {}
 
 
 @asynccontextmanager
@@ -188,6 +189,92 @@ async def create_plan(request: OrchestrateRequest):
         "tasks": plan.tasks,
     }
 
+
+class ArchitectureParseRequest(BaseModel):
+    objective: str
+    session_id: str | None = None
+
+
+class ArchitectureClarifyRequest(BaseModel):
+    session_id: str
+    answer: str
+
+
+class ArchitectureRequirementsResponse(BaseModel):
+    session_id: str
+    requirements: dict[str, Any]
+    overall_confidence: float
+    is_complete: bool
+    clarification_questions: list[str]
+
+
+@app.post("/architecture/parse", response_model=ArchitectureRequirementsResponse, tags=["Solution Architecture"])
+async def architecture_parse(request: ArchitectureParseRequest):
+    from src.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
+    from src.architecture.context.pipeline_context import PipelineContext
+
+    llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
+    agent = BusinessObjectiveParserAgent(llm=llm)
+
+    if request.session_id and request.session_id in _architecture_sessions:
+        context = _architecture_sessions[request.session_id]
+    else:
+        context = PipelineContext()
+        _architecture_sessions[context.session_id] = context
+
+    try:
+        requirements = await agent.parse(request.objective, context)
+    except Exception as e:
+        raise HTTPException(500, f"Parsing failed: {e}")
+
+    return ArchitectureRequirementsResponse(
+        session_id=context.session_id,
+        requirements=requirements.model_dump(),
+        overall_confidence=requirements.overall_confidence,
+        is_complete=requirements.is_complete,
+        clarification_questions=requirements.clarification_questions,
+    )
+
+
+@app.post("/architecture/clarify", response_model=ArchitectureRequirementsResponse, tags=["Solution Architecture"])
+async def architecture_clarify(request: ArchitectureClarifyRequest):
+    from src.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
+
+    if request.session_id not in _architecture_sessions:
+        raise HTTPException(404, f"Session '{request.session_id}' not found. Call /architecture/parse first.")
+
+    context = _architecture_sessions[request.session_id]
+    llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
+    agent = BusinessObjectiveParserAgent(llm=llm)
+
+    try:
+        requirements = await agent.clarify(request.answer, context)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Clarification failed: {e}")
+
+    return ArchitectureRequirementsResponse(
+        session_id=context.session_id,
+        requirements=requirements.model_dump(),
+        overall_confidence=requirements.overall_confidence,
+        is_complete=requirements.is_complete,
+        clarification_questions=requirements.clarification_questions,
+    )
+
+
+@app.get("/architecture/sessions/{session_id}", tags=["Solution Architecture"])
+async def architecture_session(session_id: str):
+    if session_id not in _architecture_sessions:
+        raise HTTPException(404, f"Session '{session_id}' not found.")
+
+    context = _architecture_sessions[session_id]
+    return {
+        "session_id": context.session_id,
+        "turn_count": context.turn_count(),
+        "is_ready_for_next_stage": context.is_ready_for_next_stage(),
+        "requirements": context.requirements.model_dump() if context.requirements else None,
+    }
 
 
 def cli():
