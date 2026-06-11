@@ -1,7 +1,7 @@
 import pytest
 
-from src.skills.backend.repository_pattern import GenerateRepositoryPatternSkill
-from src.skills.base import SkillCategory
+from app.skills.backend.repository_pattern import GenerateRepositoryPatternSkill
+from app.skills.base import SkillCategory
 
 
 def _skill() -> GenerateRepositoryPatternSkill:

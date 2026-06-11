@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from src.mcp.architecture_mcp import create_architecture_mcp
+from app.mcp.architecture_mcp import create_architecture_mcp
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ async def test_decide_architecture_returns_error_without_session():
 
 @pytest.mark.asyncio
 async def test_decide_architecture_returns_error_without_requirements():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     mcp, sessions = _mcp_and_sessions()
     ctx = PipelineContext()

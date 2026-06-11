@@ -1,7 +1,7 @@
 import pytest
 
-from src.skills.backend.design_patterns import GenerateDesignPatternSkill
-from src.skills.base import SkillCategory
+from app.skills.backend.design_patterns import GenerateDesignPatternSkill
+from app.skills.base import SkillCategory
 
 
 def _skill() -> GenerateDesignPatternSkill:

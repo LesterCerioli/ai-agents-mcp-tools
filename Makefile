@@ -13,10 +13,10 @@ install:
 	$(PIP) install -e ".[dev]"
 
 dev:
-	$(UVICORN) src.api.main:app --host $(HOST) --port $(PORT) --reload
+	$(UVICORN) app.api.main:app --host $(HOST) --port $(PORT) --reload
 
 run:
-	$(UVICORN) src.api.main:app --host $(HOST) --port $(PORT)
+	$(UVICORN) app.api.main:app --host $(HOST) --port $(PORT)
 
 stop:
 	-kill $$(lsof -ti:$(PORT)) 2>/dev/null && echo "Stopped" || echo "Nothing running on port $(PORT)"

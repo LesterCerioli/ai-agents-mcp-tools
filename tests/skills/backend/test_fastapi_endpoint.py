@@ -1,7 +1,7 @@
 import pytest
 
-from src.skills.backend.fastapi_endpoint import GenerateFastAPIEndpointSkill
-from src.skills.base import SkillCategory
+from app.skills.backend.fastapi_endpoint import GenerateFastAPIEndpointSkill
+from app.skills.base import SkillCategory
 
 
 def _skill() -> GenerateFastAPIEndpointSkill:

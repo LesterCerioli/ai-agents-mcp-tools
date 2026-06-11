@@ -32,10 +32,10 @@ dev = [
 ]
 
 [project.scripts]
-agents = "src.api.main:cli"
+agents = "app.api.main:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["app"]
 
 [tool.ruff]
 target-version = "py312"

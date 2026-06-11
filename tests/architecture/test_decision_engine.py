@@ -1,8 +1,8 @@
 
 import pytest
 
-from src.architecture.agents.decision_engine import SolutionArchitectureDecisionEngine
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.decision_engine import SolutionArchitectureDecisionEngine
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     AvailabilityRequirement,
     BudgetConstraint,
@@ -13,7 +13,7 @@ from src.architecture.schemas.requirements import (
     SpecificationStatus,
     TeamSizeSignal,
 )
-from src.architecture.schemas.solution import ArchitecturePattern
+from app.architecture.schemas.solution import ArchitecturePattern
 
 
 @pytest.fixture
