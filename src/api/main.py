@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
     _workflow_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=llm)
 
     print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
-    print(f"✓ MCP servers mounted at /mcp/backend, /mcp/frontend, /mcp/orchestrate")
+    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate")
     yield
 
 
@@ -123,6 +123,13 @@ class WorkflowRunRequest(BaseModel):
     session_id: str | None = None
 
 
+class ScaffoldRequest(BaseModel):
+    objective: str
+    project_name: str
+    output_dir: str
+    scope: str = "fullstack"
+
+
 # ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
@@ -137,7 +144,7 @@ async def health():
         "status": "healthy",
         "skills_registered": len(SkillRegistry.names()),
         "llm_enabled": _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
-        "mcp_servers": ["/mcp/backend", "/mcp/frontend", "/mcp/orchestrate"],
+        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate"],
     }
 
 
@@ -417,6 +424,156 @@ async def workflow_run(request: WorkflowRunRequest):
     }
 
 
+@app.post("/workflow/scaffold", tags=["Workflow"])
+async def workflow_scaffold(request: ScaffoldRequest):
+    """
+    Generate a full project scaffold from a natural-language objective and write
+    all files to disk at output_dir/project_name/.
+
+    Steps:
+      1. Architecture pipeline (parse → decide → design partner)
+      2. Comprehensive skill generation (nextjs, design, frontend, vercel, backend)
+      3. Write every artifact to output_dir/project_name/
+
+    Returns the list of files written and their paths.
+    """
+    import pathlib
+    from src.architecture.schemas.workflow import WorkflowScope
+
+    if not _orchestrator or not _workflow_coordinator:
+        raise HTTPException(503, "Service not initialized")
+
+    try:
+        scope = WorkflowScope(request.scope)
+    except ValueError:
+        raise HTTPException(400, f"Invalid scope '{request.scope}'. Valid: backend, frontend, fullstack")
+
+    output_path = pathlib.Path(request.output_dir) / request.project_name
+    try:
+        output_path.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise HTTPException(400, f"Cannot create output directory '{output_path}': {e}")
+
+    # ── Stage 1-5: architecture pipeline ────────────────────────────────────
+    try:
+        workflow_output = await _workflow_coordinator.run(
+            objective=request.objective,
+            scope=scope,
+        )
+    except Exception as e:
+        # If LLM fails (e.g. token permissions), retry with rule-based mode
+        if "403" in str(e) or "permission" in str(e).lower() or "Forbidden" in str(e):
+            logger.warning("LLM unavailable, falling back to rule-based pipeline")
+            from src.architecture.workflow_coordinator import WorkflowCoordinator
+            fallback_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=None)
+            try:
+                workflow_output = await fallback_coordinator.run(
+                    objective=request.objective,
+                    scope=scope,
+                )
+            except Exception as fallback_exc:
+                logger.exception("Scaffold fallback also failed")
+                raise HTTPException(500, f"Pipeline failed: {fallback_exc}") from fallback_exc
+        else:
+            logger.exception("Scaffold workflow failed")
+            raise HTTPException(500, f"Architecture pipeline failed: {e}") from e
+
+    domain = (
+        workflow_output.architecture_pattern.lower().replace("_", "-")
+        if workflow_output.architecture_pattern
+        else request.project_name
+    )
+
+    # ── Stage 6: comprehensive skill generation ──────────────────────────────
+    # Skills use rule-based templates and do not need LLM
+    from src.agents.orchestrator import AgentOrchestrator as _AO
+    _rule_based = _AO(llm=None)
+    nx = _rule_based.agents["nextjs"]
+    ds = _rule_based.agents["design"]
+    fe = _rule_based.agents["frontend"]
+    vc = _rule_based.agents["vercel"]
+
+    skill_calls: list[tuple] = []
+
+    if scope in (WorkflowScope.FRONTEND, WorkflowScope.FULLSTACK):
+        skill_calls += [
+            (nx, "nextjs.generate_layout",          {"name": "RootLayout", "route": "/", "description": f"Root layout for {request.project_name}"}),
+            (nx, "nextjs.generate_page",             {"route": "/", "description": "Landing page"}),
+            (nx, "nextjs.generate_page",             {"route": "/dashboard", "description": "Main dashboard"}),
+            (nx, "nextjs.generate_loading",          {"route": "/dashboard", "layout": "spinner"}),
+            (nx, "nextjs.generate_error_page",       {"route": "/dashboard"}),
+            (nx, "nextjs.generate_component",        {"name": "Navbar", "description": "Top navigation bar"}),
+            (nx, "nextjs.generate_component",        {"name": "Sidebar", "description": "Collapsible sidebar navigation"}),
+            (nx, "nextjs.generate_middleware",       {"description": "Auth middleware protecting /dashboard"}),
+            (nx, "nextjs.generate_api_route",        {"route": f"/api/{domain}", "description": f"CRUD API for {domain}"}),
+            (nx, "nextjs.generate_server_action",    {"name": f"create{domain.title()}", "description": f"Creates a {domain} entry", "inputs": "title,description", "revalidate": "/dashboard", "db": "prisma"}),
+            (nx, "nextjs.setup_nextauth",            {"providers": "Google,GitHub"}),
+            (nx, "nextjs.generate_sitemap",          {}),
+            (nx, "nextjs.generate_metadata",         {"page_name": "Dashboard", "description": f"Main dashboard for {request.project_name}", "site_name": request.project_name}),
+            (ds, "design.generate_tailwind_config",  {"brand_colors": "primary:#6366f1,secondary:#8b5cf6", "plugins": "typography", "dark_mode": "class"}),
+            (ds, "design.setup_shadcn",              {"project_type": domain}),
+            (ds, "design.implement_dark_mode",       {}),
+            (ds, "design.generate_design_tokens_css",{"primary_hsl": "239 84% 67%"}),
+            (ds, "design.generate_sidebar_layout",   {"app_name": request.project_name}),
+            (ds, "design.generate_loading_ui",       {"component": "dashboard"}),
+            (ds, "design.setup_next_fonts",          {"font_config": "--font-sans:Inter,--font-mono:JetBrains Mono"}),
+            (fe, "frontend.implement_zustand_store", {"name": "app", "state_fields": "user,theme,sidebarOpen", "actions": "setUser,setTheme,toggleSidebar", "persist": "true"}),
+            (fe, "frontend.generate_zod_schema",     {"name": domain.title(), "fields": "title:string,description:string,status:string"}),
+            (fe, "frontend.implement_tanstack_query",{"entity": domain, "api_base": f"/api/{domain}", "hooks": "list,detail,create,delete"}),
+            (fe, "frontend.implement_toast_system",  {}),
+            (vc, "vercel.generate_config",           {"project_name": request.project_name, "framework": "nextjs"}),
+            (vc, "vercel.generate_env_validation",   {"server_vars": "DATABASE_URL:url,NEXTAUTH_SECRET,NEXTAUTH_URL:url", "public_vars": "NEXT_PUBLIC_APP_URL:url"}),
+            (vc, "vercel.deployment_checklist",      {}),
+        ]
+
+    if scope in (WorkflowScope.BACKEND, WorkflowScope.FULLSTACK):
+        skill_calls += [
+            (_orchestrator.agents["backend"], "backend.fastapi_endpoint",  {"resource": domain}),
+            (_orchestrator.agents["backend"], "backend.sqlalchemy_model",   {"resource": domain}),
+            (_orchestrator.agents["backend"], "backend.repository_pattern", {"resource": domain}),
+            (_orchestrator.agents["backend"], "backend.pytest_suite",       {"resource": domain}),
+            (_orchestrator.agents["backend"], "backend.docker_setup",       {"app_name": request.project_name, "services": "postgres,redis"}),
+        ]
+
+    # collect workflow artifacts first
+    all_artifacts = list(workflow_output.backend_artifacts) + list(workflow_output.frontend_artifacts)
+
+    # run skills and collect additional artifacts
+    errors: list[str] = []
+    for agent, skill, params in skill_calls:
+        try:
+            result = await agent.execute_skill(skill, **params)
+            if result.success:
+                all_artifacts.extend(result.artifacts)
+            elif result.error:
+                errors.append(f"{skill}: {result.error}")
+        except Exception as exc:
+            errors.append(f"{skill}: {exc}")
+
+    # ── Write to disk ────────────────────────────────────────────────────────
+    written: list[str] = []
+    seen: set[str] = set()
+    for artifact in all_artifacts:
+        if artifact.filename in seen:
+            continue
+        seen.add(artifact.filename)
+        dest = output_path / artifact.filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(artifact.content, encoding="utf-8")
+        written.append(artifact.filename)
+
+    return {
+        "project_name": request.project_name,
+        "output_path": str(output_path),
+        "architecture_pattern": workflow_output.architecture_pattern,
+        "system_design_summary": workflow_output.system_design_summary,
+        "files_written": len(written),
+        "files": sorted(written),
+        "errors": errors,
+        "session_id": workflow_output.session_id,
+    }
+
+
 @app.get("/workflow/{session_id}", tags=["Workflow"])
 async def workflow_status(session_id: str):
     """Return the status and artifacts for a completed or in-progress workflow session."""
@@ -459,16 +616,21 @@ async def mount_mcp_servers():
     if _orchestrator is None or _workflow_coordinator is None:
         return
 
+    from src.mcp.architecture_mcp import ArchitectureMCPServer
     from src.mcp.backend_mcp import BackendMCPServer
     from src.mcp.frontend_mcp import FrontendMCPServer
     from src.mcp.orchestrator_mcp import OrchestratorMCPServer
 
+    llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
+
+    architecture_server = ArchitectureMCPServer(_architecture_sessions, llm=llm)
     backend_server = BackendMCPServer(_orchestrator.agents["backend"])
     frontend_server = FrontendMCPServer(_orchestrator)
     orchestrator_server = OrchestratorMCPServer(
         _workflow_coordinator, _orchestrator, _architecture_sessions
     )
 
+    app.mount("/mcp/architecture", architecture_server.sse_app())
     app.mount("/mcp/backend", backend_server.sse_app())
     app.mount("/mcp/frontend", frontend_server.sse_app())
     app.mount("/mcp/orchestrate", orchestrator_server.sse_app())
