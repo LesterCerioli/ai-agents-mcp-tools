@@ -1,111 +1,101 @@
-# Enterprise AI Agents
+# Enterprise AI Agents & MCP Tools
 
-AI agents with specialized Next.js, Design, and Frontend skills, powered by open-source Hugging Face LLMs and exposed via a FastAPI REST API.
+An agentic backend platform that transforms natural-language business objectives into production-ready code scaffolds. Specialized agents cover Go, Python/FastAPI, Next.js, design systems, and Vercel deployments — all coordinated through an architecture pipeline and exposed via a FastAPI REST API and MCP (Model Context Protocol) servers.
 
-## Overview
+---
 
-Four specialized agents collaborate through an orchestrator to handle complex frontend development tasks:
+## Agent Roster
 
 | Agent | Skills | Focus |
 |-------|--------|-------|
+| `go` | 27 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
+| `backend` | 6 | Python/FastAPI — endpoints, SQLAlchemy, repository pattern, Docker |
 | `nextjs` | 25 | App Router, API routes, server actions, layouts, data fetching |
 | `design` | 17 | UI components, design systems, dark mode, accessibility |
 | `frontend` | 13 | State management, hooks, forms, animations, performance |
 | `vercel` | 5 | Deployment, environment config, edge functions |
 
-Skills run with or without an LLM — when no token is provided, they return structured template-based output.
+**Total: 93 registered skills.** All skills work in rule-based (template) mode without an LLM. When a `HUGGINGFACE_TOKEN` is configured, skills use the Hugging Face Inference API for context-aware output.
 
 ---
 
-## Routing & Intelligence Architecture
+## Architecture Pipeline
 
-### Where the Intelligence Lives
-
-The application runs on Render's free tier (0.5 CPU / 512 MB RAM). No language model runs inside the application. All LLM inference is delegated to the **Hugging Face Inference API** via HTTP:
+The platform includes a multi-stage architecture pipeline that processes a business objective end-to-end:
 
 ```
-Render (this application)            Hugging Face (their infrastructure)
-┌─────────────────────────┐          ┌──────────────────────────────────┐
-│  FastAPI                │          │  Qwen2.5-Coder-7B-Instruct       │
-│  AgentOrchestrator      │──HTTP───▶│  (7B parameters)                 │
-│  Specialized Agents     │◀─────────│  running on their GPU servers    │
-│  Skills (58 total)      │          └──────────────────────────────────┘
-│  BM25 Index (~50 KB)    │
-└─────────────────────────┘
-  RAM used: ~150–200 MB
-  LLM RAM:  0 (remote)
+[Natural Language Objective]
+        ↓
+[BusinessObjectiveParserAgent]
+  — Extracts 7 requirement dimensions (scalability, compliance, availability, …)
+  — Multi-turn clarification support
+        ↓
+[SolutionArchitectureDecisionEngine]
+  — Rule-based pattern selection (microservices, hexagonal, monolith, …)
+  — Bypassed when architecture_pattern is forced in the request
+        ↓
+[SolutionFlowDiagramAgent] → [ValidationAgent]
+        ↓
+[DesignPartnerOrchestrator]
+  — Hexagonal | Microservices | Monolith design partner
+        ↓
+[WorkflowCoordinator]
+  — Routes to GoAgent or BackendAgent based on backend_language
+  — Generates frontend artifacts via NextJSAgent + DesignAgent
+  — Writes every file to disk at output_dir/project_name/
 ```
 
-The `AsyncInferenceClient` from `huggingface-hub` acts as a pure HTTP client — it sends prompts and receives generated code. The `HUGGINGFACE_TOKEN` environment variable is the only credential required.
+### Requirement Dimensions
+
+| Dimension | Examples |
+|-----------|---------|
+| `scalability` | expected users, peak load, growth rate |
+| `availability` | target uptime (SLA), RTO, RPO |
+| `compliance` | GDPR, HIPAA, SOC2, PCI-DSS, ISO 27001 |
+| `domain_boundaries` | e-commerce, fintech, healthcare, SaaS, IoT |
+| `integration` | Stripe, Kafka, REST/gRPC/WebSocket patterns |
+| `budget` | startup / mid-market / enterprise tier |
+| `team_size` | engineering headcount, organisational maturity |
 
 ---
 
-### Skill Routing: BM25 (Zero Cost, Zero API Calls)
+## MCP Servers
 
-Skill selection is handled by an **in-memory BM25 index** built at startup from the `name + description + tags` of all 58 registered skills. No LLM call is needed to decide which skill to invoke.
+Four MCP (Model Context Protocol) SSE servers are mounted on the API and can be consumed by any MCP-compatible client (Claude Desktop, custom agents, etc.):
 
-```
-Startup
-  SkillBM25Index.build()
-    → tokenizes name + description + tags for each of the 58 skills
-    → builds BM25Okapi corpus in memory (~50 KB)
-
-Request: "create a dashboard with authentication"
-  SkillBM25Index.search(query, top_k=5)
-    → BM25 keyword scoring (local, microseconds)
-    → returns: [nextjs.auth (0.94), nextjs.generate_component (0.88), ...]
-    → no API call, no cost, deterministic
-```
-
-This design eliminates two problems with LLM-based routing:
-- **Hallucination** — the LLM could return a skill name that does not exist.
-- **Cost** — every routing decision would consume an API call before the actual code generation.
+| Mount path | Purpose |
+|---|---|
+| `/mcp/architecture` | Pipeline tools: parse, clarify, decide, select design partner |
+| `/mcp/backend` | Python/FastAPI skill execution |
+| `/mcp/frontend` | Next.js + design skill execution |
+| `/mcp/orchestrate` | Cross-agent orchestration |
 
 ---
 
-### Full Request Flow
+## Intelligence Architecture
 
-A complete orchestrated request goes through two distinct stages:
-
-```
-POST /orchestrate  { "task": "Build a SaaS dashboard with auth and dark mode" }
-
-  Stage 1 — Skill Routing (BM25, local, free)
-  ┌──────────────────────────────────────────────┐
-  │  BM25Index.search("SaaS dashboard auth ...")  │
-  │  → nextjs.auth          score: 0.94           │
-  │  → nextjs.generate_component  score: 0.88     │
-  │  → design.color_system  score: 0.71           │
-  └──────────────────────────────────────────────┘
-              ↓
-
-  Stage 2 — Code Generation (Hugging Face API, per skill)
-  ┌──────────────────────────────────────────────┐
-  │  For each matched skill:                      │
-  │    LLM.generate_code(skill_prompt)            │
-  │    → HTTP POST to Hugging Face Inference API  │
-  │    → returns production-ready TypeScript/TSX  │
-  └──────────────────────────────────────────────┘
-              ↓
-
-  Response: { artifacts: [...], dependencies: [...] }
-```
-
-| Stage | Technology | LLM calls | Cost |
-|---|---|---|---|
-| Skill routing | BM25 (local) | 0 | free |
-| Param extraction | Hugging Face API | 1 (small prompt) | API token |
-| Code generation | Hugging Face API | 1 per skill | API token |
-
----
-
-### No-Token Mode
-
-All 58 skills include a hardcoded fallback template. When `HUGGINGFACE_TOKEN` is not set, the system still functions — routing works identically via BM25, and each skill returns a valid but generic scaffold:
+No model runs inside this application. All LLM inference is delegated to the **Hugging Face Inference API** over HTTP, making the service deployable on minimal infrastructure (0.5 CPU / 512 MB RAM):
 
 ```
-With token     → contextual, production-ready code tailored to the task
-Without token  → generic template scaffold (compilable, not contextual)
+This application                     Hugging Face
+┌──────────────────────────┐         ┌────────────────────────────────┐
+│  FastAPI                 │         │  Qwen2.5-Coder-7B-Instruct     │
+│  AgentOrchestrator       │──HTTP──▶│  (or any configured model)     │
+│  Architecture Pipeline   │◀────────│  running on their GPU servers  │
+│  93 Skills               │         └────────────────────────────────┘
+│  BM25 Skill Router       │
+└──────────────────────────┘
+  RAM: ~150–200 MB   |   LLM RAM: 0 (remote)
+```
+
+### Skill Routing — BM25 (zero cost, zero API calls)
+
+Skill selection uses an **in-memory BM25 index** built at startup from the `name + description + tags` of all 93 skills. No LLM call is needed to decide which skill to invoke.
+
+```
+"build a Go microservice with JWT auth"
+  → BM25 search (local, microseconds)
+  → go.fiber_handler (0.94), go.fiber_middleware (0.91), go.service (0.87), …
 ```
 
 ---
@@ -113,292 +103,314 @@ Without token  → generic template scaffold (compilable, not contextual)
 ## Requirements
 
 - Python 3.12+
-- Hugging Face account (free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens))
+- Hugging Face account — free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with **Inference** permission enabled
+
+---
 
 ## Setup
 
 ```bash
 # 1. Clone and enter the project
 git clone <repo-url>
-cd agents
+cd ai-agents-mcp-tools
 
 # 2. Create a virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
-pip install -e ".[dev]"
+# 3. Install all dependencies
+make install
+# or: pip install -e ".[dev]"
 
 # 4. Configure environment
 cp .env.example .env
-# Edit .env and set HUGGINGFACE_TOKEN
+# Edit .env — set HUGGINGFACE_TOKEN
 ```
 
-## Running the API
+---
+
+## Running
 
 ```bash
-# Using the installed CLI entry point
-agents
-
-# Or directly with uvicorn
-uvicorn src.api.main:app --reload --port 4250
+make dev      # hot-reload on port 3443
+make run      # production mode
+make stop     # kill the process on port 3443
+make test     # full test suite
+make lint     # ruff linter
 ```
 
-The API starts at `http://localhost:4250`. Interactive docs at `http://localhost:4250/docs`.
+API: `http://localhost:3443`  
+Interactive docs: `http://localhost:3443/docs`
 
-## API Endpoints
+---
+
+## API Reference
 
 ### Health
 
 ```
 GET /          — service status
-GET /health    — health check with skill count and LLM status
+GET /health    — agent count, skill count, LLM status, MCP server list
 ```
 
 ### Agents & Skills
 
 ```
-GET  /agents              — list all agents
-GET  /skills              — list all skills
-GET  /skills?agent=nextjs — skills for a specific agent
-GET  /skills?category=design
-GET  /skills?tag=auth
+GET /agents                   — list all agents and their skill counts
+GET /skills                   — list all 93 skills
+GET /skills?agent=go          — skills for a specific agent
+GET /skills?category=backend
+GET /skills?tag=fiber
 ```
 
-### Execution
+### Execute a Skill
 
-**Execute a specific skill directly:**
-
-```
+```http
 POST /skills/execute
 {
-  "agent": "nextjs",
-  "skill": "create_page",
+  "agent": "go",
+  "skill": "go.fiber_handler",
   "params": {
-    "name": "Dashboard",
-    "route": "/dashboard"
+    "resource": "order",
+    "module_name": "github.com/org/order-service"
   }
 }
 ```
 
-**Orchestrate a complex multi-agent task:**
+### Orchestrate a Multi-Agent Task
 
-```
+```http
 POST /orchestrate
 {
   "task": "Create a SaaS dashboard with auth, dark mode, and data tables"
 }
 ```
 
-**Generate a plan without executing:**
+### Architecture Pipeline
 
-```
-POST /plan
-{
-  "task": "Build a user profile page with avatar upload"
-}
-```
-
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `HUGGINGFACE_TOKEN` | — | Hugging Face API token |
-| `LLM_MODEL` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Model to use |
-| `LLM_MAX_TOKENS` | `4096` | Max output tokens |
-| `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
-| `API_HOST` | `0.0.0.0` | Server bind address |
-| `API_PORT` | `4250` | Server port |
-| `API_DEBUG` | `true` | Enable auto-reload |
-
-### Recommended models
-
-```
-# Code-specialized (best for dev agents)
-Qwen/Qwen2.5-Coder-7B-Instruct
-deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
-codellama/CodeLlama-13b-Instruct-hf
-
-# General purpose
-meta-llama/Llama-3.1-8B-Instruct
-microsoft/Phi-3.5-mini-instruct
-mistralai/Mistral-7B-Instruct-v0.3
-```
-
-## Project Structure
-
-```
-src/
-├── agents/
-│   ├── base.py           # BaseAgent ABC, AgentResult, AgentContext
-│   ├── orchestrator.py   # AgentOrchestrator — routes and coordinates agents
-│   ├── nextjs_agent.py   # Next.js App Router specialist
-│   ├── design_agent.py   # UI/UX and design systems specialist
-│   ├── frontend_agent.py # React frontend patterns specialist
-│   └── vercel_agent.py   # Vercel deployment specialist
-├── skills/
-│   ├── base.py           # BaseSkill ABC, SkillResult, CodeArtifact
-│   └── registry.py       # SkillRegistry — @SkillRegistry.register decorator
-├── llm/
-│   ├── base.py           # BaseLLMProvider interface
-│   ├── bm25_index.py     # SkillBM25Index — in-memory BM25 skill routing
-│   ├── huggingface.py    # Hugging Face InferenceClient implementation
-│   └── prompts.py        # System prompts for each agent type
-└── api/
-    └── main.py           # FastAPI app, routes, CLI entry point
-```
-
-## Adding a Skill
-
-1. Create a skill file in the appropriate category directory.
-2. Subclass `BaseSkill`, set class attributes, implement `execute`.
-3. Decorate with `@SkillRegistry.register`.
-4. Import the module in the package `__init__.py`.
-
-```python
-from src.skills.base import BaseSkill, SkillCategory, SkillResult, SkillParameter
-from src.skills.registry import SkillRegistry
-
-@SkillRegistry.register
-class CreateLayoutSkill(BaseSkill):
-    name = "create_layout"
-    description = "Generate a Next.js layout component"
-    category = SkillCategory.NEXTJS
-    tags = ["layout", "app-router"]
-    parameters = [
-        SkillParameter(name="name", description="Layout name", type="string"),
-    ]
-
-    async def execute(self, name: str, **kwargs) -> SkillResult:
-        # generate code, optionally calling self.llm.chat(...)
-        ...
-```
-
-## File Naming Conventions
-
-Skills enforce Next.js App Router conventions:
-
-| File type | Pattern | Language |
-|-----------|---------|----------|
-| API routes | `src/app/api/{name}/route.js` | JavaScript |
-| Components | `{Name}.tsx` | TypeScript |
-| Pages | `page.tsx`, `layout.tsx` | TypeScript |
-| Styles | `{name}.styles.ts` | TypeScript |
-| Services | `src/services/{name}.ts` | TypeScript |
-| Server actions | `src/actions/{name}.ts` | TypeScript |
-| Hooks / utils / types | `*.ts` | TypeScript |
-
-## Development
-
-```bash
-# Lint
-ruff check src/
-
-# Type check
-mypy src/
-
-# Tests
-pytest
-```
-
----
-
-## Solution Architecture Pipeline
-
-The system includes a second layer of agents focused on **architecture design automation**. This pipeline receives natural language business objectives and transforms them into structured architecture requirement sets that drive downstream design partner agents.
-
-### Pipeline Overview
-
-```text
-[User: Natural Language Business Objective]
-        ↓
-[BusinessObjectiveParserAgent]  ← Feature #7 (implemented)
-  - Extracts 7 requirement dimensions
-  - Assigns confidence scores (0.0–1.0)
-  - Generates clarification questions for gaps
-  - Supports multi-turn clarification sessions
-        ↓
-[PipelineContext]  — shared context object
-  - Stores ArchitectureRequirements
-  - Tracks conversation history
-  - Signals readiness for next pipeline stage
-        ↓
-[Next stages — Tasks 2–5 from EPIC #1]
-  - Solution Architecture Decision Engine
-  - System Architecture Design Partners
-  - SOLID/Pattern Enforcement
-  - MCP Orchestration & REST output
-```
-
-### Requirement Dimensions Extracted
-
-| Dimension | Examples |
-|-----------|---------|
-| `scalability` | expected users, peak load, growth rate |
-| `availability` | target uptime (SLA), RTO, RPO |
-| `compliance` | GDPR, HIPAA, SOC2, PCI-DSS, ISO 27001, FERPA… |
-| `domain_boundaries` | e-commerce, fintech, healthcare, SaaS, IoT, logistics… |
-| `integration` | external systems (Stripe, Kafka…), REST/gRPC/WebSocket patterns |
-| `budget` | tier (startup/mid-market/enterprise), cloud preference, cost sensitivity |
-| `team_size` | engineering headcount range, organizational maturity |
-
-Each dimension carries a `confidence` score (0.0–1.0). Dimensions with low confidence generate targeted clarification questions.
-
-### Solution Architecture Endpoints
-
-```json
+```http
 POST /architecture/parse
 {
   "objective": "Build a HIPAA-compliant telemedicine platform for 10,000 concurrent patients",
   "session_id": null
 }
-→ {
-  "session_id": "...",
-  "requirements": { "scalability": {...}, "compliance": {...}, ... },
-  "overall_confidence": 0.72,
-  "is_complete": true,
-  "clarification_questions": []
-}
 ```
 
-```json
+```http
 POST /architecture/clarify
 {
-  "session_id": "...",
+  "session_id": "<session_id>",
   "answer": "We need 99.9% uptime and plan to grow to 1 million users in 2 years."
 }
-→ { "session_id": "...", "requirements": {...}, "overall_confidence": 0.84, ... }
 ```
 
-```json
+```http
 GET /architecture/sessions/{session_id}
-→ { "session_id": "...", "turn_count": 3, "is_ready_for_next_stage": true, "requirements": {...} }
 ```
 
-### Architecture Module Structure
+### Full Project Scaffold
 
-```text
-src/architecture/
-├── schemas/
-│   └── requirements.py       # ArchitectureRequirements + 7 dimension Pydantic models
-├── context/
-│   └── pipeline_context.py   # PipelineContext — shared state across pipeline agents
-└── agents/
-    ├── base.py                # BaseArchitectureAgent ABC
-    ├── business_objective_parser.py  # BusinessObjectiveParserAgent (parse + clarify)
-    └── extraction/
-        ├── keyword_extractor.py  # Rule-based extraction (LLM fallback)
-        └── clarification.py      # ClarificationEngine — generates targeted questions
+Runs the complete pipeline — architecture decision → skill generation → writes every file to disk.
 
-tests/architecture/
-└── test_business_objective_parser.py  # 71 tests across 12 scenarios
+```http
+POST /workflow/scaffold
+{
+  "objective": "Build a Go 1.24 microservice for order management with Fiber v2, PostgreSQL, JWT auth, and clean architecture",
+  "project_name": "order-service",
+  "output_dir": "/home/user/projects",
+  "scope": "backend",
+  "backend_language": "go",
+  "backend_framework": "fiber",
+  "architecture_pattern": "microservices"
+}
 ```
 
-### Running the Tests
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `objective` | ✓ | — | Natural-language description of what to build |
+| `project_name` | ✓ | — | Directory name for the output |
+| `output_dir` | ✓ | — | Absolute path where the project folder is created |
+| `scope` | | `fullstack` | `backend`, `frontend`, or `fullstack` |
+| `backend_language` | | `python` | `python` or `go` |
+| `backend_framework` | | `fiber` | Go: `fiber`, `gin`, `gorilla`, `echo`, `chi` |
+| `architecture_pattern` | | _(auto)_ | Forces a pattern: `microservices`, `hexagonal`, `monolith`, `layered`, `event_driven`, `serverless`, `cqrs` |
+
+When `architecture_pattern` is not set, the decision engine selects the pattern based on the parsed requirements. When set, the decision engine is bypassed and the specified pattern is applied directly.
+
+**Example response:**
+```json
+{
+  "project_name": "order-service",
+  "output_path": "/home/user/projects/order-service",
+  "architecture_pattern": "MICROSERVICES",
+  "files_written": 32,
+  "files": ["go.mod", "cmd/server/main.go", "internal/app/server.go", "..."],
+  "errors": [],
+  "session_id": "..."
+}
+```
+
+---
+
+## GoAgent — 27 Skills
+
+### Shared Skills (framework-agnostic)
+
+| Skill | Generates |
+|---|---|
+| `go.setup_project` | `go.mod`, `main.go`, folder structure (`cmd/`, `internal/`, `pkg/`), DI bootstrap |
+| `go.go_struct` | Domain structs + request/response DTOs with `json`, `validate`, `db` tags |
+| `go.repository` | Repository interface + pgx/v5 PostgreSQL implementation |
+| `go.service` | Service layer with business logic injected via repository interface |
+| `go.docker_setup` | Multi-stage Dockerfile (builder → distroless) + `docker-compose.yml` |
+| `go.test_suite` | testify/suite unit tests + mockery-generated mocks, table-driven patterns |
+| `go.generate_migration` | SQL migration files (up/down) for golang-migrate + CLI runner |
+| `go.config` | Config struct + viper loader for env/YAML |
+| `go.logger` | Structured logging setup with uber-go/zap + request-scoped middleware |
+
+### HTTP Framework Skills
+
+| Framework | Skills |
+|---|---|
+| **Fiber v2** | `go.fiber_app`, `go.fiber_handler`, `go.fiber_routes`, `go.fiber_middleware` |
+| **Gin** | `go.gin_app`, `go.gin_handler`, `go.gin_routes`, `go.gin_middleware` |
+| **Gorilla Mux** | `go.gorilla_app`, `go.gorilla_handler`, `go.gorilla_routes` |
+| **Echo v4** | `go.echo_app`, `go.echo_handler`, `go.echo_routes`, `go.echo_middleware` |
+| **Chi v5** | `go.chi_app`, `go.chi_handler`, `go.chi_routes` |
+
+### Go Stack
+
+| Concern | Library |
+|---|---|
+| Database | `jackc/pgx/v5` |
+| Validation | `go-playground/validator/v10` |
+| Auth / JWT | `golang-jwt/jwt/v5` |
+| Testing | `testify/suite` + `mockery` |
+| Migrations | `golang-migrate/migrate/v4` |
+| Config | `spf13/viper` |
+| Logging | `uber-go/zap` |
+
+---
+
+## Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `HUGGINGFACE_TOKEN` | — | Hugging Face API token (Inference permission required) |
+| `LLM_MODEL` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Model used for code generation |
+| `LLM_MAX_TOKENS` | `4096` | Maximum output tokens per request |
+| `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
+| `API_HOST` | `0.0.0.0` | Server bind address |
+| `API_PORT` | `3443` | Server port |
+
+### Recommended Models
+
+```
+# Code-specialized
+Qwen/Qwen2.5-Coder-7B-Instruct
+deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
+mistralai/Mistral-7B-Instruct-v0.3
+
+# General purpose
+meta-llama/Llama-3.1-8B-Instruct
+microsoft/Phi-3.5-mini-instruct
+```
+
+---
+
+## Project Structure
+
+```
+app/
+├── agents/
+│   ├── base.py                  # BaseAgent, AgentResult, AgentContext
+│   ├── orchestrator.py          # AgentOrchestrator — BM25 routing + coordination
+│   ├── go_agent.py              # GoAgent — 27 skills across 5 HTTP frameworks
+│   ├── backend_agent.py         # Python/FastAPI specialist
+│   ├── nextjs_agent.py          # Next.js App Router specialist
+│   ├── design_agent.py          # UI/UX and design systems specialist
+│   ├── frontend_agent.py        # React frontend patterns specialist
+│   └── vercel_agent.py          # Vercel deployment specialist
+├── skills/
+│   ├── base.py                  # BaseSkill, SkillResult, CodeArtifact, SkillCategory
+│   ├── registry.py              # SkillRegistry — @SkillRegistry.register decorator
+│   ├── go/
+│   │   ├── shared/              # setup_project, go_struct, repository, service, …
+│   │   └── http/                # fiber, gin, gorilla, echo, chi
+│   ├── backend/                 # fastapi_endpoint, sqlalchemy_model, …
+│   ├── nextjs/                  # components, routing, data_fetching, auth, …
+│   ├── design/                  # tailwind, shadcn, color_system, typography, …
+│   ├── frontend/                # state_management, forms, i18n, performance, …
+│   └── vercel/                  # deployment, environment, edge_config, analytics
+├── architecture/
+│   ├── agents/
+│   │   ├── business_objective_parser.py
+│   │   ├── decision_engine.py
+│   │   ├── solution_flow_diagram.py
+│   │   ├── validation_agent.py
+│   │   └── system/              # hexagonal, microservices, monolith design partners
+│   ├── context/
+│   │   └── pipeline_context.py  # PipelineContext — shared state across pipeline
+│   └── schemas/                 # requirements, solution, system_design, workflow
+├── architecture/
+│   └── workflow_coordinator.py  # End-to-end pipeline + code generation router
+├── mcp/
+│   ├── architecture_mcp.py      # MCP server: parse, clarify, decide, select_design_partner
+│   ├── backend_mcp.py           # MCP server: Python/FastAPI skills
+│   ├── frontend_mcp.py          # MCP server: Next.js + design skills
+│   └── orchestrator_mcp.py     # MCP server: cross-agent orchestration
+├── llm/
+│   ├── base.py                  # BaseLLMProvider interface
+│   ├── bm25_index.py            # SkillBM25Index — in-memory BM25 skill routing
+│   ├── huggingface.py           # AsyncInferenceClient (REST, no local model)
+│   └── prompts.py               # System prompts per agent
+└── api/
+    └── main.py                  # FastAPI app, all routes, CLI entry point
+```
+
+---
+
+## Adding a Skill
+
+1. Create a file in the appropriate category directory under `app/skills/`.
+2. Subclass `BaseSkill`, set class attributes, implement `execute()`.
+3. Decorate with `@SkillRegistry.register`.
+4. Import the module in the package `__init__.py`.
+
+```python
+from app.skills.base import BaseSkill, SkillCategory, SkillResult, SkillParameter, CodeArtifact
+from app.skills.registry import SkillRegistry
+
+@SkillRegistry.register
+class MySkill(BaseSkill):
+    name = "go.my_skill"
+    description = "Generate a custom Go component"
+    category = SkillCategory.GO
+    tags = ["go", "custom"]
+    parameters = [
+        SkillParameter("resource", "Resource name"),
+    ]
+
+    async def execute(self, resource: str, **kwargs) -> SkillResult:
+        code = f"package main\n\n// {resource} generated\n"
+        return SkillResult(
+            success=True,
+            summary=f"Generated {resource}",
+            artifacts=[CodeArtifact(f"{resource}.go", code, "go")],
+        )
+```
+
+---
+
+## Development
 
 ```bash
-pytest tests/architecture/ -v
+make test       # run all 323 tests
+make lint       # ruff check
+make format     # ruff format
 ```
+
+---
 
 ## License
 

@@ -1,7 +1,7 @@
 import pytest
 
-from src.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAgent
-from src.architecture.schemas.solution import (
+from app.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAgent
+from app.architecture.schemas.solution import (
     ArchitectureLayer,
     ArchitecturePattern,
     ComponentType,

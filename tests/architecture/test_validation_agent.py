@@ -1,8 +1,8 @@
 import pytest
 
-from src.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAgent
-from src.architecture.agents.validation_agent import SolutionArchitectureValidationAgent
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAgent
+from app.architecture.agents.validation_agent import SolutionArchitectureValidationAgent
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     AvailabilityRequirement,
     BudgetConstraint,
@@ -13,7 +13,7 @@ from src.architecture.schemas.requirements import (
     SpecificationStatus,
     TeamSizeSignal,
 )
-from src.architecture.schemas.solution import (
+from app.architecture.schemas.solution import (
     ArchitecturalDriver,
     ArchitectureLayer,
     ArchitecturePattern,

@@ -1,13 +1,13 @@
 import pytest
 
-from src.architecture.agents.system.design_partner_orchestrator import DesignPartnerOrchestrator
-from src.architecture.context.pipeline_context import PipelineContext
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.system.design_partner_orchestrator import DesignPartnerOrchestrator
+from app.architecture.context.pipeline_context import PipelineContext
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     DomainBoundariesRequirement,
     SpecificationStatus,
 )
-from src.architecture.schemas.solution import (
+from app.architecture.schemas.solution import (
     ArchitectureLayer,
     ArchitecturePattern,
     ComponentType,

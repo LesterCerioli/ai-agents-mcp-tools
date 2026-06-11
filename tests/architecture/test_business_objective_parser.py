@@ -1,8 +1,8 @@
 import pytest
 
-from src.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
-from src.architecture.context.pipeline_context import PipelineContext
-from src.architecture.schemas.requirements import ArchitectureRequirements, SpecificationStatus
+from app.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
+from app.architecture.context.pipeline_context import PipelineContext
+from app.architecture.schemas.requirements import ArchitectureRequirements, SpecificationStatus
 
 
 @pytest.fixture

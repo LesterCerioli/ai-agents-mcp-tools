@@ -4,9 +4,9 @@ Tests the full pipeline from objective to WorkflowOutput across all three scopes
 """
 import pytest
 
-from src.architecture.workflow_coordinator import WorkflowCoordinator
-from src.architecture.schemas.workflow import WorkflowScope
-from src.agents.orchestrator import AgentOrchestrator
+from app.architecture.workflow_coordinator import WorkflowCoordinator
+from app.architecture.schemas.workflow import WorkflowScope
+from app.agents.orchestrator import AgentOrchestrator
 
 
 def _coordinator() -> WorkflowCoordinator:
@@ -129,8 +129,8 @@ async def test_workflow_output_has_all_required_fields():
 
 @pytest.mark.asyncio
 async def test_existing_context_skips_parse():
-    from src.architecture.context.pipeline_context import PipelineContext
-    from src.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
+    from app.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.agents.business_objective_parser import BusinessObjectiveParserAgent
 
     orchestrator = AgentOrchestrator(llm=None)
     coordinator = WorkflowCoordinator(orchestrator=orchestrator, llm=None)

@@ -4,8 +4,8 @@ Covers 5 real-world scenarios: e-commerce, fintech, logistics, SaaS multi-tenant
 """
 import pytest
 
-from src.architecture.agents.system.microservices_design_partner import MicroservicesDesignPartnerAgent
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.system.microservices_design_partner import MicroservicesDesignPartnerAgent
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     AvailabilityRequirement,
     BudgetConstraint,
@@ -16,7 +16,7 @@ from src.architecture.schemas.requirements import (
     SpecificationStatus,
     TeamSizeSignal,
 )
-from src.architecture.schemas.solution import (
+from app.architecture.schemas.solution import (
     ArchitecturalDriver,
     ArchitectureLayer,
     ArchitecturePattern,
@@ -28,7 +28,7 @@ from src.architecture.schemas.solution import (
     TradeOffMatrix,
     TradeOffRating,
 )
-from src.architecture.schemas.system_design import (
+from app.architecture.schemas.system_design import (
     ApiGatewayType,
     CommunicationStyle,
     DataDistributionPattern,
@@ -413,7 +413,7 @@ def test_fallback_uses_decision_components():
 
 @pytest.mark.asyncio
 async def test_run_populates_system_design_on_context():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     agent = _agent()
     req = _req(
@@ -437,7 +437,7 @@ async def test_run_populates_system_design_on_context():
 
 @pytest.mark.asyncio
 async def test_run_noop_when_no_decision():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     agent = _agent()
     ctx = PipelineContext()
