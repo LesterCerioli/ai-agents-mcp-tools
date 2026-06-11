@@ -12,7 +12,9 @@ from src.architecture.schemas.solution import (
     ArchitecturePattern,
     ComponentType,
     DecisionComponent,
+    DiagramView,
     SolutionArchitectureDecision,
+    SolutionFlowDiagram,
     SolutionPattern,
     TradeOffMatrix,
     TradeOffRating,
@@ -47,6 +49,16 @@ def _decision(pattern: ArchitecturePattern, domain: str = "test") -> SolutionArc
     )
 
 
+def _diagram(decision_id: str) -> SolutionFlowDiagram:
+    empty = DiagramView(mermaid="graph TD", nodes=[], edges=[])
+    return SolutionFlowDiagram(
+        decision_id=decision_id,
+        context_view=empty,
+        container_view=empty,
+        component_view=empty,
+    )
+
+
 def _req(domain: str = "test", bounded_contexts: list[str] | None = None) -> ArchitectureRequirements:
     return ArchitectureRequirements(
         raw_input="test",
@@ -59,8 +71,6 @@ def _req(domain: str = "test", bounded_contexts: list[str] | None = None) -> Arc
         ),
     )
 
-
-# ── Routing tests ─────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_microservices_pattern_routes_to_microservices_partner():
@@ -106,6 +116,7 @@ async def test_hexagonal_pattern_routes_to_hexagonal_partner():
     ctx = PipelineContext()
     ctx.requirements = _req("billing", ["invoice", "payment"])
     ctx.decision = _decision(ArchitecturePattern.HEXAGONAL, "billing")
+    ctx.diagram = _diagram(ctx.decision.decision_id)
 
     ctx = await _orchestrator().run(ctx)
 
@@ -155,7 +166,6 @@ async def test_serverless_pattern_routes_to_monolith_partner():
     assert ctx.system_design.active_partner == "monolith_design_partner"
 
 
-# ── Guard clauses ─────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_noop_when_no_decision():
