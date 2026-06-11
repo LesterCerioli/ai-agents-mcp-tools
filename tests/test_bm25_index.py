@@ -1,5 +1,5 @@
 import pytest
-from src.llm.bm25_index import SkillBM25Index, SkillMatch
+from app.llm.bm25_index import SkillBM25Index, SkillMatch
 
 _MOCK_SKILLS: dict[str, list[dict]] = {
     "nextjs": [

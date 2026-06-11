@@ -2,9 +2,9 @@
 import json
 import pytest
 
-from src.mcp.orchestrator_mcp import create_orchestrator_mcp
-from src.architecture.workflow_coordinator import WorkflowCoordinator
-from src.agents.orchestrator import AgentOrchestrator
+from app.mcp.orchestrator_mcp import create_orchestrator_mcp
+from app.architecture.workflow_coordinator import WorkflowCoordinator
+from app.agents.orchestrator import AgentOrchestrator
 
 
 def _setup():

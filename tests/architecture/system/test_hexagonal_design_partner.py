@@ -1,14 +1,14 @@
 import pytest
 
-from src.architecture.agents.system.hexagonal_design_partner import HexagonalDesignPartnerAgent
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.system.hexagonal_design_partner import HexagonalDesignPartnerAgent
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     ComplianceRequirement,
     DomainBoundariesRequirement,
     IntegrationRequirement,
     SpecificationStatus,
 )
-from src.architecture.schemas.solution import (
+from app.architecture.schemas.solution import (
     ArchitectureLayer,
     ArchitecturePattern,
     ComponentType,
@@ -22,7 +22,7 @@ from src.architecture.schemas.solution import (
     TradeOffMatrix,
     TradeOffRating,
 )
-from src.architecture.schemas.system_design import PortType
+from app.architecture.schemas.system_design import PortType
 
 
 def _agent() -> HexagonalDesignPartnerAgent:
@@ -576,7 +576,7 @@ def test_scenario_payment_processing():
 
 @pytest.mark.asyncio
 async def test_run_populates_hexagonal_design():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     agent = _agent()
     decision = _decision("billing")
@@ -602,7 +602,7 @@ async def test_run_populates_hexagonal_design():
 
 @pytest.mark.asyncio
 async def test_run_returns_context_unchanged_when_diagram_missing():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     agent = _agent()
     req = _req(

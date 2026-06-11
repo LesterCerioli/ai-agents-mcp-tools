@@ -1,7 +1,7 @@
 import pytest
 
-from src.architecture.agents.system.monolith_design_partner import MonolithDesignPartnerAgent
-from src.architecture.schemas.requirements import (
+from app.architecture.agents.system.monolith_design_partner import MonolithDesignPartnerAgent
+from app.architecture.schemas.requirements import (
     ArchitectureRequirements,
     BudgetConstraint,
     DomainBoundariesRequirement,
@@ -9,7 +9,7 @@ from src.architecture.schemas.requirements import (
     SpecificationStatus,
     TeamSizeSignal,
 )
-from src.architecture.schemas.solution import (
+from app.architecture.schemas.solution import (
     ArchitectureLayer,
     ArchitecturePattern,
     ComponentType,
@@ -19,7 +19,7 @@ from src.architecture.schemas.solution import (
     TradeOffMatrix,
     TradeOffRating,
 )
-from src.architecture.schemas.system_design import MonolithLayering
+from app.architecture.schemas.system_design import MonolithLayering
 
 
 def _agent() -> MonolithDesignPartnerAgent:
@@ -180,7 +180,7 @@ def test_kubernetes_deployment_for_large_teams():
 
 @pytest.mark.asyncio
 async def test_run_populates_monolith_design():
-    from src.architecture.context.pipeline_context import PipelineContext
+    from app.architecture.context.pipeline_context import PipelineContext
 
     agent = _agent()
     req = _req(

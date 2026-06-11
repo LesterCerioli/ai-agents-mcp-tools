@@ -2,8 +2,8 @@
 import json
 import pytest
 
-from src.mcp.backend_mcp import create_backend_mcp
-from src.agents.backend_agent import BackendAgent
+from app.mcp.backend_mcp import create_backend_mcp
+from app.agents.backend_agent import BackendAgent
 
 
 def _agent() -> BackendAgent:
