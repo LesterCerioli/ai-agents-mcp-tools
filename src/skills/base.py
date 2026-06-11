@@ -12,6 +12,7 @@ class SkillCategory(str, Enum):
     DESIGN = "design"
     FRONTEND = "frontend"
     VERCEL = "vercel"
+    BACKEND = "backend"
 
 
 @dataclass

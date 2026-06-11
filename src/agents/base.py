@@ -1,8 +1,13 @@
-"""Base agent implementation."""
+
+import json
+import logging
 from dataclasses import dataclass, field
-from typing import Any, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 from src.skills.base import BaseSkill, SkillCategory, SkillResult
 from src.skills.registry import SkillRegistry
+from src.llm.bm25_index import SkillBM25Index
 
 if TYPE_CHECKING:
     from src.llm.base import BaseLLMProvider
@@ -18,7 +23,7 @@ class AgentContext:
 
 @dataclass
 class AgentResult:
-    """Result from an agent task execution."""
+    
     success: bool
     summary: str
     skill_results: list[SkillResult] = field(default_factory=list)
@@ -45,8 +50,7 @@ class AgentResult:
 
 
 class BaseAgent:
-    """Base class for all specialized agents."""
-
+    
     name: str
     description: str
     category: SkillCategory
@@ -56,9 +60,11 @@ class BaseAgent:
         self.llm = llm
         self._skills: dict[str, BaseSkill] = {}
         self._load_skills()
+        self._bm25 = SkillBM25Index()
+        self._bm25.build({self.name: [s.schema() for s in self._skills.values()]})
 
     def _load_skills(self) -> None:
-        """Load all skills for this agent's category."""
+        
         skills = SkillRegistry.instantiate_all(self.category, self.llm)
         self._skills = {skill.name: skill for skill in skills}
 
@@ -76,50 +82,60 @@ class BaseAgent:
         return await skill.execute(**params)
 
     async def run(self, context: AgentContext) -> AgentResult:
-        """Execute a task — override in subclasses for complex orchestration."""
+        
+        matches = self._bm25.search(context.task, top_k=1)
+        if not matches:
+            return AgentResult(
+                success=False,
+                summary="No matching skill found for the given task.",
+                agent_name=self.name,
+            )
+
+        skill_name = matches[0].skill_name
+        params: dict[str, Any] = {}
+
         if self.llm:
-            return await self._run_with_llm(context)
+            extracted = await self._extract_params(skill_name, context.task)
+            if extracted is None:
+                logger.warning(
+                    "Failed to decode LLM params JSON for skill %s; aborting skill execution",
+                    skill_name,
+                )
+                return AgentResult(
+                    success=False,
+                    summary=f"Could not extract parameters for skill '{skill_name}': LLM returned invalid JSON.",
+                    agent_name=self.name,
+                )
+            params = extracted
+
+        skill_result = await self.execute_skill(skill_name, **params)
         return AgentResult(
-            success=False,
-            summary="No LLM configured. Provide HUGGINGFACE_TOKEN and retry.",
+            success=skill_result.success,
+            summary=f"Executed {skill_name}: {skill_result.summary}",
+            skill_results=[skill_result],
             agent_name=self.name,
         )
 
-    async def _run_with_llm(self, context: AgentContext) -> AgentResult:
-        """Use LLM to analyze task and select/execute appropriate skills."""
-        skills_summary = "\n".join(
-            f"- {s['name']}: {s['description']}"
-            for s in self.available_skills
+    async def _extract_params(self, skill_name: str, task: str) -> Optional[dict[str, Any]]:
+        
+        skill = self.get_skill(skill_name)
+        required = [p for p in skill.schema()["parameters"] if p.get("required", True)]
+        if not required:
+            return {}
+
+        param_lines = "\n".join(f"- {p['name']}: {p['description']}" for p in required)
+        prompt = (
+            f"Task: {task}\n\n"
+            f"Extract the following parameters for skill '{skill_name}':\n"
+            f"{param_lines}\n\n"
+            "Return only JSON: {\"param_name\": \"value\"}"
         )
 
-        analysis_prompt = (
-            f"Task: {context.task}\n\n"
-            f"Available skills:\n{skills_summary}\n\n"
-            "Select the best skill and its parameters. "
-            "Respond with JSON: {\"skill\": \"skill.name\", \"params\": {...}, \"reasoning\": \"...\"}"
-        )
-
-        response = await self.llm.chat(analysis_prompt, system_prompt=self.system_prompt)
-
-        import json
+        response = await self.llm.chat(prompt, system_prompt=self.system_prompt)  # type: ignore[union-attr]
         try:
-            selection = json.loads(response)
-            skill_name = selection.get("skill", "")
-            params = selection.get("params", {})
-            skill_result = await self.execute_skill(skill_name, **params)
-            return AgentResult(
-                success=skill_result.success,
-                summary=f"Executed {skill_name}: {skill_result.summary}",
-                skill_results=[skill_result],
-                agent_name=self.name,
-            )
-        except (json.JSONDecodeError, KeyError) as e:
-            return AgentResult(
-                success=False,
-                summary="Failed to parse skill selection",
-                agent_name=self.name,
-                error=str(e),
-            )
+            return json.loads(response)  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            return None
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} skills={len(self._skills)}>"
