@@ -7,6 +7,7 @@ import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -128,6 +129,47 @@ class ScaffoldRequest(BaseModel):
     backend_language: str = "python"
     backend_framework: str = "fiber"
     architecture_pattern: str | None = None
+
+
+# ── CLI Installer Downloads ───────────────────────────────────────────────────
+
+@app.get("/cli/download/linux", tags=["CLI"])
+async def download_linux():
+    """Download the Linux CLI binary."""
+    from app.cli.services.linux_installer_service import LinuxInstallerService
+    return LinuxInstallerService().download()
+
+
+@app.get("/cli/download/windows", tags=["CLI"])
+async def download_windows():
+    """Download the Windows CLI binary (.exe)."""
+    from app.cli.services.windows_installer_service import WindowsInstallerService
+    return WindowsInstallerService().download()
+
+
+@app.get("/cli/install.sh", tags=["CLI"], response_class=PlainTextResponse)
+async def cli_install_script():
+    """Serve the Linux/macOS install script with the API URL injected from environment."""
+    import pathlib
+    api_base = os.getenv("API_BASE_URL", "").rstrip("/")
+    if not api_base:
+        raise HTTPException(status_code=503, detail="API_BASE_URL environment variable not configured.")
+    script = pathlib.Path(__file__).parent / "cli" / "install.sh"
+    if not script.exists():
+        raise HTTPException(status_code=404, detail="Install script not found.")
+    content = script.read_text().replace("__API_BASE_URL__", api_base)
+    return PlainTextResponse(content=content, media_type="text/plain")
+
+
+@app.get("/cli/status", tags=["CLI"])
+async def cli_status():
+    """Check which CLI installers are available for download."""
+    from app.cli.services.linux_installer_service import LinuxInstallerService
+    from app.cli.services.windows_installer_service import WindowsInstallerService
+    return {
+        "linux": LinuxInstallerService().is_available(),
+        "windows": WindowsInstallerService().is_available(),
+    }
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -403,11 +445,11 @@ async def workflow_run(request: WorkflowRunRequest):
         "summary": output.summary,
         "confidence": output.confidence,
         "backend_artifacts": [
-            {"filename": a.filename, "language": a.language, "description": a.description}
+            {"filename": a.filename, "content": a.content, "language": a.language, "description": a.description}
             for a in output.backend_artifacts
         ],
         "frontend_artifacts": [
-            {"filename": a.filename, "language": a.language, "description": a.description}
+            {"filename": a.filename, "content": a.content, "language": a.language, "description": a.description}
             for a in output.frontend_artifacts
         ],
         "integration_contracts": {
@@ -588,6 +630,11 @@ async def workflow_scaffold(request: ScaffoldRequest):
         "system_design_summary": workflow_output.system_design_summary,
         "files_written": len(written),
         "files": sorted(written),
+        "artifacts": [
+            {"filename": a.filename, "content": a.content, "language": a.language, "description": a.description}
+            for a in all_artifacts
+            if a.filename in seen
+        ],
         "errors": errors,
         "session_id": workflow_output.session_id,
     }

@@ -39,12 +39,21 @@ env/
 *.swo
 
 # Build artifacts
-build/
 dist/
 *.egg-info/
 *.egg
 *.manifest
 *.spec
+
+# Ignore only PyInstaller/setuptools build output inside build/, not our scripts
+build/lib/
+build/bdist*/
+build/temp*/
+
+# CLI binaries are tracked so Render can serve them for download
+!app/cli/dist/
+!app/cli/dist/agents-linux
+!app/cli/dist/agents-windows.exe
 
 # Installer logs
 pip-log.txt

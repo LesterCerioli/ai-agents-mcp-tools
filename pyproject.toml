@@ -32,7 +32,7 @@ dev = [
 ]
 
 [project.scripts]
-agents = "app.api.main:cli"
+agents = "app.cli.commands:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
