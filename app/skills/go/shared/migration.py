@@ -36,7 +36,7 @@ class GoGenerateMigrationSkill(BaseSkill):
         **_: Any,
     ) -> SkillResult:
         r = resource.lower().replace("-", "_").replace(" ", "_")
-        table = f"{r}s"
+        table = self._pluralize(r)
         parsed = self._parse_fields(fields)
         column_defs = self._render_columns(parsed)
 
@@ -124,6 +124,13 @@ class GoGenerateMigrationSkill(BaseSkill):
                 "Run `make migrate-down` to roll back",
             ],
         )
+
+    def _pluralize(self, word: str) -> str:
+        if word.endswith(("s", "x", "z", "ch", "sh")):
+            return word + "es"
+        if word.endswith("y") and len(word) > 1 and word[-2] not in "aeiou":
+            return word[:-1] + "ies"
+        return word + "s"
 
     def _parse_fields(self, fields: str) -> list[tuple[str, str]]:
         result = []
