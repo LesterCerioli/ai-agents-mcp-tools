@@ -55,7 +55,8 @@ RUN chmod -R 755 /app && \
 
 ENV AUTH_URL="" \
     HUGGINGFACE_TOKEN="" \
-    LLM_MODEL="" 
+    LLM_MODEL_1="" \ 
+    LLM_MODEL_2=""
     
 
 EXPOSE 8000
