@@ -1,27 +1,4 @@
-"""
-Architecture MCP Server — exposes the architecture pipeline as individual, controllable tools.
 
-Flow between agents:
-  parse_requirements                    → BusinessObjectiveParserAgent
-  clarify_requirements (0-N times)      → BusinessObjectiveParserAgent.clarify()
-  decide_architecture                   → DecisionEngine + SolutionFlowDiagram + ValidationAgent
-  select_design_partner                 → DesignPartnerOrchestrator
-       ├─ HexagonalDesignPartnerAgent   (pattern == hexagonal)
-       ├─ MicroservicesDesignPartner    (microservices | event_driven | cqrs)
-       └─ MonolithDesignPartner         (monolith | layered | serverless)
-  → caller then invokes /mcp/backend and /mcp/frontend with the recommended tool calls
-
-Tools:
-  - parse_requirements
-  - clarify_requirements
-  - decide_architecture
-  - select_design_partner
-  - get_session_state
-
-Resources:
-  - architecture://sessions
-  - architecture://patterns
-"""
 import json
 from typing import TYPE_CHECKING
 
@@ -38,8 +15,7 @@ def create_architecture_mcp(
 ) -> FastMCP:
     mcp = FastMCP("architecture-mcp")
 
-    # ── Resources ─────────────────────────────────────────────────────────────
-
+    
     @mcp.resource("architecture://sessions")
     async def active_sessions() -> str:
         return json.dumps(list(sessions.keys()))
@@ -84,8 +60,7 @@ def create_architecture_mcp(
             },
         ], indent=2)
 
-    # ── Stage 1 ───────────────────────────────────────────────────────────────
-
+    
     @mcp.tool()
     async def parse_requirements(
         objective: str,
@@ -137,8 +112,7 @@ def create_architecture_mcp(
             "next_action": next_action,
         }, indent=2)
 
-    # ── Stage 1b ──────────────────────────────────────────────────────────────
-
+    
     @mcp.tool()
     async def clarify_requirements(
         session_id: str,
@@ -190,8 +164,7 @@ def create_architecture_mcp(
             "next_action": next_action,
         }, indent=2)
 
-    # ── Stage 2–4 ─────────────────────────────────────────────────────────────
-
+    
     @mcp.tool()
     async def decide_architecture(
         session_id: str,
@@ -275,8 +248,7 @@ def create_architecture_mcp(
             "next_action": "select_design_partner",
         }, indent=2)
 
-    # ── Stage 5 ───────────────────────────────────────────────────────────────
-
+    
     @mcp.tool()
     async def select_design_partner(
         session_id: str,
@@ -438,8 +410,151 @@ def create_architecture_mcp(
             "next_actions": next_actions,
         }, indent=2)
 
-    # ── State inspector ───────────────────────────────────────────────────────
+    
+    @mcp.tool()
+    async def design_monolith_architecture(
+        session_id: str,
+    ) -> str:
+        """
+        Design a full Modular Monolith architecture for an existing session.
 
+        Produces DDD bounded context module boundaries with per-module layered structure
+        (presentation/application/domain/infrastructure), internal API contracts enforcing
+        no cross-module database queries, vertical slice assessment, a conditional Strangler
+        Fig migration path (generated only when distribution signals are detected), shared
+        kernel identification, and scenario designs for three contexts: early-stage startup,
+        mid-size SaaS, and legacy modernization.
+
+        Requires decide_architecture to have been called first.
+
+        Args:
+            session_id: Session ID from decide_architecture.
+
+        Returns JSON with:
+          design_id                — unique identifier for this design
+          modules                  — bounded context modules with layered structure and API contracts
+          layering_strategy        — layered | modular | vertical_slices
+          internal_api_contracts   — full set of inter-module contracts (no cross-module DB queries)
+          shared_kernel            — shared data types, utilities, and domain events
+          vertical_slice_candidates — modules assessed for independent deployment
+          migration_path           — Strangler Fig plan (only when distribution signals detected)
+          anti_corruption_layers   — ACLs for external system boundaries
+          scenario_designs         — startup, mid-size SaaS, and legacy modernization designs
+          rationale                — design rationale and confidence
+        """
+        from app.architecture.agents.system.monolith_architecture_design_partner import (
+            MonolithArchitectureDesignPartnerAgent,
+        )
+
+        ctx = sessions.get(session_id)
+        if ctx is None:
+            return json.dumps({"error": f"Session '{session_id}' not found."})
+        if ctx.decision is None:
+            return json.dumps({"error": "Architecture decision missing. Call decide_architecture first."})
+        if ctx.diagram is None:
+            return json.dumps({"error": "Solution diagram missing. Call decide_architecture first."})
+        if ctx.requirements is None:
+            return json.dumps({"error": "Requirements missing. Call parse_requirements first."})
+
+        agent = MonolithArchitectureDesignPartnerAgent(llm=llm)
+        ctx = await agent.run(ctx)
+        sessions[session_id] = ctx
+
+        system_design = ctx.system_design
+        if system_design is None or system_design.monolith_architecture_design is None:
+            return json.dumps({"error": "Monolith architecture design could not be generated."})
+
+        design = system_design.monolith_architecture_design
+
+        return json.dumps({
+            "session_id": session_id,
+            "design_id": design.design_id,
+            "decision_id": design.decision_id,
+            "modules": [
+                {
+                    "name": m.name,
+                    "responsibilities": m.responsibilities,
+                    "layered_structure": {
+                        "presentation": m.layered_structure.presentation,
+                        "application": m.layered_structure.application,
+                        "domain": m.layered_structure.domain,
+                        "infrastructure": m.layered_structure.infrastructure,
+                    },
+                    "allowed_dependencies": m.allowed_dependencies,
+                    "technology_hints": m.technology_hints,
+                    "internal_api_contracts": [
+                        {
+                            "source_module": c.source_module,
+                            "target_module": c.target_module,
+                            "interface_name": c.interface_name,
+                            "description": c.description,
+                            "exposed_operations": c.exposed_operations,
+                        }
+                        for c in m.internal_api_contracts
+                    ],
+                }
+                for m in design.modules
+            ],
+            "layering_strategy": design.layering_strategy.value,
+            "internal_api_contracts": [
+                {
+                    "source_module": c.source_module,
+                    "target_module": c.target_module,
+                    "interface_name": c.interface_name,
+                    "description": c.description,
+                    "exposed_operations": c.exposed_operations,
+                }
+                for c in design.internal_api_contracts
+            ],
+            "shared_kernel": {
+                "data_types": design.shared_kernel.data_types,
+                "utilities": design.shared_kernel.utilities,
+                "events": design.shared_kernel.events,
+                "rationale": design.shared_kernel.rationale,
+            },
+            "vertical_slice_candidates": [
+                {
+                    "module_name": vs.module_name,
+                    "justification": vs.justification,
+                    "priority": vs.priority,
+                    "recommended_extraction_point": vs.recommended_extraction_point,
+                }
+                for vs in design.vertical_slice_candidates
+            ],
+            "migration_path": (
+                {
+                    "distribution_signals": design.migration_path.distribution_signals,
+                    "strangler_fig_candidates": [
+                        {
+                            "module_name": c.module_name,
+                            "rationale": c.rationale,
+                            "extraction_order": c.extraction_order,
+                            "recommended_seam": c.recommended_seam,
+                        }
+                        for c in design.migration_path.strangler_fig_candidates
+                    ],
+                    "extraction_order": design.migration_path.extraction_order,
+                    "migration_rationale": design.migration_path.migration_rationale,
+                }
+                if design.migration_path else None
+            ),
+            "anti_corruption_layers": design.anti_corruption_layers,
+            "deployment_strategy": design.deployment_strategy,
+            "scenario_designs": [
+                {
+                    "scenario": s.scenario,
+                    "description": s.description,
+                    "recommended_strategy": s.recommended_strategy.value,
+                    "module_count": s.module_count,
+                    "key_considerations": s.key_considerations,
+                }
+                for s in design.scenario_designs
+            ],
+            "rationale": design.rationale,
+            "design_confidence": design.design_confidence,
+        }, indent=2)
+
+    
     @mcp.tool()
     async def get_session_state(session_id: str) -> str:
         """
@@ -514,8 +629,7 @@ def create_architecture_mcp(
 
 
 class ArchitectureMCPServer:
-    """Wrapper that holds the FastMCP instance and exposes the ASGI app."""
-
+    
     def __init__(
         self,
         sessions: "dict[str, PipelineContext]",
