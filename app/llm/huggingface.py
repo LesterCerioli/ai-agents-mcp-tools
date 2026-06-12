@@ -26,7 +26,7 @@ class HuggingFaceProvider(BaseLLMProvider):
         temperature: float = 0.1,
     ):
         self.token = token or os.getenv("HUGGINGFACE_TOKEN")
-        self.model = model or os.getenv("LLM_MODEL", RECOMMENDED_MODELS["code"])
+        self.model = model or os.getenv("LLM_MODEL_2", RECOMMENDED_MODELS["code"])
         self.default_max_tokens = max_tokens
         self.default_temperature = temperature
         self._client: AsyncInferenceClient | None = None
