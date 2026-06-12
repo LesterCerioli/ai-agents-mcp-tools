@@ -3,9 +3,12 @@ from typing import Any
 
 import httpx
 
-# URL is injected at build time via AGENTS_API_URL environment variable.
-# Never hardcoded in source — set this variable in the build environment.
-API_BASE_URL = os.getenv("AGENTS_API_URL", "").rstrip("/")
+try:
+    from app.cli._build_config import AGENTS_API_URL as _BAKED_URL
+except ImportError:
+    _BAKED_URL = ""
+
+API_BASE_URL = os.getenv("AGENTS_API_URL", _BAKED_URL).rstrip("/")
 
 if not API_BASE_URL:
     raise RuntimeError(

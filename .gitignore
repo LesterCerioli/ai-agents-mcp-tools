@@ -108,3 +108,5 @@ __pypackages__/
 
 # Cython debug symbols
 cython_debug/
+# Generated at build time
+app/cli/_build_config.py
