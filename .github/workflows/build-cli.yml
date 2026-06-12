@@ -1,0 +1,95 @@
+name: Build CLI Binaries
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/cli/**"
+      - "build/**"
+      - ".github/workflows/build-cli.yml"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Build Linux binary
+        env:
+          AGENTS_API_URL: ${{ secrets.AGENTS_API_URL }}
+        run: bash build/build_linux.sh
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agents-linux
+          path: app/cli/dist/agents-linux
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Build Windows binary
+        run: |
+          $DIST = "app/cli/dist"
+          New-Item -ItemType Directory -Force -Path $DIST
+          pyinstaller `
+            --onefile `
+            --name agents-windows `
+            --distpath $DIST `
+            --hidden-import app.cli.platforms.linux `
+            --hidden-import app.cli.platforms.windows `
+            --hidden-import app.cli.client `
+            --hidden-import rich `
+            --hidden-import httpx `
+            --hidden-import typer `
+            app/cli/commands.py
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agents-windows
+          path: app/cli/dist/agents-windows.exe
+
+  commit-binaries:
+    needs: [build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: agents-linux
+          path: app/cli/dist/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: agents-windows
+          path: app/cli/dist/
+
+      - name: Commit binaries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/cli/dist/
+          git diff --cached --quiet || git commit -m "chore: update CLI binaries [skip ci]"
+          git push

@@ -94,7 +94,7 @@ class GoTestSuiteSkill(BaseSkill):
             "}\n\n"
             f"func Test{R}Service(t *testing.T) {{\n"
             f"\tsuite.Run(t, new({R}ServiceSuite))\n"
-            "}}\n\n"
+            "}\n\n"
             f"func (s *{R}ServiceSuite) Test_Get_Found() {{\n"
             f"\tentity := &domain.{R}{{ID: 1, Name: \"test\", CreatedAt: time.Now(), UpdatedAt: time.Now()}}\n"
             f"\ts.mock.On(\"FindByID\", context.Background(), int64(1)).Return(entity, nil)\n"
