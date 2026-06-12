@@ -658,7 +658,7 @@ async def mount_mcp_servers():
 def cli():
     import uvicorn
     uvicorn.run(
-        "src.api.main:app",
+        "app.main:app",
         host=os.getenv("API_HOST", "0.0.0.0"),
         port=int(os.getenv("API_PORT", "8000")),
         reload=os.getenv("API_DEBUG", "true").lower() == "true",
