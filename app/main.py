@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
     from app.architecture.workflow_coordinator import WorkflowCoordinator
 
     token = os.getenv("HUGGINGFACE_TOKEN")
-    model = os.getenv("LLM_MODEL")
+    model = os.getenv("LLM_MODEL_1")
 
     llm = HuggingFaceProvider(token=token, model=model) if token else None
     _orchestrator = AgentOrchestrator(llm=llm)
