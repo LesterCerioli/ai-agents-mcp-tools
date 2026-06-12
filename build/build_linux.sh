@@ -16,6 +16,12 @@ cd "$ROOT"
 
 source venv/bin/activate 2>/dev/null || true
 
+# Generate build-time config so the URL is baked into the binary
+cat > "$ROOT/app/cli/_build_config.py" <<EOF
+# Generated at build time — do not edit manually.
+AGENTS_API_URL = "$AGENTS_API_URL"
+EOF
+
 pyinstaller \
   --onefile \
   --name agents-linux \
