@@ -8,6 +8,7 @@ from .system import (
     HexagonalDesignPartnerAgent,
     MicroservicesDesignPartnerAgent,
     MonolithDesignPartnerAgent,
+    MonolithArchitectureDesignPartnerAgent,
 )
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "MicroservicesDesignPartnerAgent",
     "HexagonalDesignPartnerAgent",
     "MonolithDesignPartnerAgent",
+    "MonolithArchitectureDesignPartnerAgent",
     "DesignPartnerOrchestrator",
 ]

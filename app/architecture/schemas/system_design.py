@@ -207,3 +207,83 @@ class SystemDesignOutput(BaseModel):
     hexagonal_design: HexagonalSystemDesign | None = None
     hexagonal_architecture_design: HexagonalArchitectureDesign | None = None
     monolith_design: MonolithSystemDesign | None = None
+    monolith_architecture_design: "MonolithArchitectureDesign | None" = None
+
+
+class MonolithModuleLayer(BaseModel):
+    presentation: list[str] = Field(default_factory=list)
+    application: list[str] = Field(default_factory=list)
+    domain: list[str] = Field(default_factory=list)
+    infrastructure: list[str] = Field(default_factory=list)
+
+
+class MonolithInternalAPIContract(BaseModel):
+    source_module: str
+    target_module: str
+    interface_name: str
+    description: str = ""
+    exposed_operations: list[str] = Field(default_factory=list)
+
+
+class MonolithArchitectureModule(BaseModel):
+    name: str
+    responsibilities: list[str] = Field(default_factory=list)
+    layered_structure: MonolithModuleLayer = Field(default_factory=MonolithModuleLayer)
+    allowed_dependencies: list[str] = Field(default_factory=list)
+    technology_hints: list[str] = Field(default_factory=list)
+    internal_api_contracts: list[MonolithInternalAPIContract] = Field(default_factory=list)
+
+
+class VerticalSliceCandidate(BaseModel):
+    module_name: str
+    justification: str
+    priority: str
+    recommended_extraction_point: str = ""
+
+
+class StranglerFigCandidate(BaseModel):
+    module_name: str
+    rationale: str
+    extraction_order: int
+    recommended_seam: str = ""
+
+
+class MigrationPathPlan(BaseModel):
+    distribution_signals: list[str] = Field(default_factory=list)
+    strangler_fig_candidates: list[StranglerFigCandidate] = Field(default_factory=list)
+    extraction_order: list[str] = Field(default_factory=list)
+    migration_rationale: str = ""
+
+
+class SharedKernelIdentification(BaseModel):
+    data_types: list[str] = Field(default_factory=list)
+    utilities: list[str] = Field(default_factory=list)
+    events: list[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
+class MonolithScenarioDesign(BaseModel):
+    scenario: str
+    description: str
+    recommended_strategy: MonolithLayering
+    module_count: int
+    key_considerations: list[str] = Field(default_factory=list)
+
+
+class MonolithArchitectureDesign(BaseModel):
+    design_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    decision_id: str
+    modules: list[MonolithArchitectureModule] = Field(default_factory=list)
+    layering_strategy: MonolithLayering
+    internal_api_contracts: list[MonolithInternalAPIContract] = Field(default_factory=list)
+    shared_kernel: SharedKernelIdentification = Field(default_factory=SharedKernelIdentification)
+    vertical_slice_candidates: list[VerticalSliceCandidate] = Field(default_factory=list)
+    migration_path: MigrationPathPlan | None = None
+    anti_corruption_layers: list[str] = Field(default_factory=list)
+    deployment_strategy: str = ""
+    scenario_designs: list[MonolithScenarioDesign] = Field(default_factory=list)
+    rationale: str = ""
+    design_confidence: float = Field(default=0.8, ge=0.0, le=1.0)
+
+
+SystemDesignOutput.model_rebuild()
