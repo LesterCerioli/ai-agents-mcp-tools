@@ -49,7 +49,7 @@ class GeneratePytestSuiteSkill(BaseSkill):
             f"from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker\n"
             f"from app.models.{r} import Base\n"
             f"from app.db.session import get_db\n"
-            f"from app.api.main import app\n\n"
+            f"from app.main import app\n\n"
             f"TEST_DATABASE_URL = 'sqlite+aiosqlite:///./test.db'\n\n\n"
             f"@pytest.fixture(scope='session')\n"
             f"def event_loop_policy():\n"

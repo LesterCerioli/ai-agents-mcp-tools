@@ -131,9 +131,11 @@ cp .env.example .env
 
 ## Running
 
+### Development
+
 ```bash
 make dev      # hot-reload on port 3443
-make run      # production mode
+make run      # without reload, port 3443
 make stop     # kill the process on port 3443
 make test     # full test suite
 make lint     # ruff linter
@@ -141,6 +143,12 @@ make lint     # ruff linter
 
 API: `http://localhost:3443`  
 Interactive docs: `http://localhost:3443/docs`
+
+### Production
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 3030 --reload
+```
 
 ---
 
@@ -364,8 +372,8 @@ app/
 │   ├── bm25_index.py            # SkillBM25Index — in-memory BM25 skill routing
 │   ├── huggingface.py           # AsyncInferenceClient (REST, no local model)
 │   └── prompts.py               # System prompts per agent
+├── main.py                      # FastAPI app, all routes, CLI entry point
 └── api/
-    └── main.py                  # FastAPI app, all routes, CLI entry point
 ```
 
 ---
