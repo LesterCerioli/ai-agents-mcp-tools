@@ -738,6 +738,10 @@ async def workflow_improve(request: ImproveRequest):
     plan = await _orchestrator.plan(enriched_task)
     go_ctx = _parse_go_context(request.project_files)
 
+    _hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
+    _model_1 = os.getenv("LLM_MODEL_1", "")
+    _model_2 = os.getenv("LLM_MODEL_2", "")
+
     all_artifacts = []
     errors: list[str] = []
     summaries: list[str] = []
@@ -755,9 +759,20 @@ async def workflow_improve(request: ImproveRequest):
         try:
             params: dict[str, Any] = {}
 
-            if agent.llm:
+            if _hf_token and _model_1 and _model_2:
                 try:
-                    extracted = await agent._extract_params(skill_name, enriched_task)
+                    from app.llm.dual_extractor import extract_params_dual
+                    skill_obj = agent.get_skill(skill_name)
+                    required = [p for p in skill_obj.schema()["parameters"] if p.get("required", True)]
+                    extracted = await extract_params_dual(
+                        skill_name=skill_name,
+                        task=enriched_task,
+                        required_params=required,
+                        system_prompt=agent.system_prompt,
+                        token=_hf_token,
+                        model_1=_model_1,
+                        model_2=_model_2,
+                    )
                     if extracted:
                         params = extracted
                 except Exception:
