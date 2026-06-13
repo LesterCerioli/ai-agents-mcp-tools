@@ -124,6 +124,70 @@ def list_skills(
 
 
 @app.command()
+def improve(
+    instruction: str = typer.Argument(..., help="What to implement or improve in the project"),
+    path: Optional[str] = typer.Option(None, "--path", "-p", help="Path to the existing project (default: current directory)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory for generated files (default: project path)"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Apply improvements or add new features to an existing project."""
+    from app.cli.project_scanner import scan_project
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    project_path = Path(path or os.getcwd()).resolve()
+    output_path = Path(output).resolve() if output else project_path
+
+    if not project_path.is_dir():
+        console.print(f"[bold red]✗[/bold red] Path not found: {project_path}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — improving [bold]{project_path.name}[/bold]")
+    console.print(f"[dim]Instruction: {instruction}[/dim]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Scanning project structure...", total=None)
+
+        project_context = scan_project(str(project_path))
+        progress.update(
+            task,
+            description=f"Scanned {project_context['file_count']} files ({project_context['project_type']}) — sending to agents...",
+        )
+
+        try:
+            result = client.improve(instruction=instruction, project_context=project_context)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Improve failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing files...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = result.get("files", [])
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Changes written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files written[/dim]\n")
+
+    if result.get("errors"):
+        console.print("[yellow]Warnings:[/yellow]")
+        for err in result["errors"]:
+            console.print(f"  [dim]• {err}[/dim]")
+
+
+@app.command()
 def version():
     """Show CLI version and API status."""
     client = AgentsClient()
