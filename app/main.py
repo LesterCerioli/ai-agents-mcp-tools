@@ -131,6 +131,12 @@ class ScaffoldRequest(BaseModel):
     architecture_pattern: str | None = None
 
 
+class ImproveRequest(BaseModel):
+    instruction: str
+    project_files: list[dict[str, Any]] = []
+    project_type: str = "unknown"
+
+
 # ── CLI Installer Downloads ───────────────────────────────────────────────────
 
 @app.get("/cli/download/linux", tags=["CLI"])
@@ -637,6 +643,171 @@ async def workflow_scaffold(request: ScaffoldRequest):
         ],
         "errors": errors,
         "session_id": workflow_output.session_id,
+    }
+
+
+def _parse_go_context(project_files: list[dict[str, Any]]) -> dict[str, Any]:
+    """Extract Go project metadata from scanned files — used as fallback when LLM param extraction fails."""
+    import re
+    by_path = {f["path"]: f.get("content") or "" for f in project_files}
+
+    module_name, app_name, framework = "", "", "fiber"
+    for line in by_path.get("go.mod", "").splitlines():
+        s = line.strip()
+        if s.startswith("module "):
+            module_name = s.split()[1]
+            app_name = module_name.split("/")[-1]
+        if "gofiber/fiber" in s:
+            framework = "fiber"
+        elif "gin-gonic/gin" in s:
+            framework = "gin"
+        elif "labstack/echo" in s:
+            framework = "echo"
+
+    return {"module_name": module_name, "app_name": app_name, "framework": framework}
+
+
+def _fallback_params(skill_name: str, instruction: str, go_ctx: dict[str, Any]) -> dict[str, Any]:
+    """Build skill params from project context when LLM is unavailable."""
+    import re
+    module_name = go_ctx.get("module_name", "")
+    app_name = go_ctx.get("app_name", "")
+    framework = go_ctx.get("framework", "fiber")
+
+    resource = ""
+    match = re.search(r"\b(?:para\s+(?:o\s+)?|for\s+(?:the\s+)?|do\s+|de\s+)(\w+)", instruction, re.IGNORECASE)
+    if match:
+        resource = match.group(1).lower().rstrip("s")
+    if not resource and app_name:
+        resource = app_name.split("-")[0]
+
+    s = skill_name.lower()
+    if "setup_project" in s:
+        return {"module_name": module_name, "app_name": app_name, "framework": framework}
+    if "test_suite" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "go_struct" in s or ("struct" in s and "go" in s):
+        return {"resource": resource}
+    if "repository" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "service" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "handler" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "routes" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "middleware" in s:
+        return {"module_name": module_name}
+    if "migration" in s:
+        return {"resource": resource}
+    if "docker" in s:
+        return {"app_name": app_name, "services": "postgres,redis"}
+    if "config" in s:
+        return {"app_name": app_name, "module_name": module_name}
+    if any(f"{fw}_app" in s for fw in ("fiber", "gin", "echo")):
+        return {"app_name": app_name, "module_name": module_name}
+    if any(f"{fw}_handler" in s for fw in ("fiber", "gin", "echo")):
+        return {"resource": resource, "module_name": module_name}
+    if any(f"{fw}_routes" in s for fw in ("fiber", "gin", "echo")):
+        return {"resource": resource, "module_name": module_name}
+    if any(f"{fw}_middleware" in s for fw in ("fiber", "gin", "echo")):
+        return {"module_name": module_name}
+    return {}
+
+
+@app.post("/workflow/improve", tags=["Workflow"])
+async def workflow_improve(request: ImproveRequest):
+    """
+    Improve or extend an existing project from a natural-language instruction.
+
+    The CLI scans the project locally and sends its file structure here.
+    For each matched skill the LLM (HuggingFace) extracts the required params;
+    if the LLM is unavailable the params are inferred from the project context.
+    """
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+
+    file_paths = [f["path"] for f in request.project_files if f.get("path")]
+    project_summary = (
+        f"[Existing {request.project_type} project — {len(file_paths)} files: "
+        f"{', '.join(file_paths[:20])}"
+        f"{'...' if len(file_paths) > 20 else ''}]"
+    )
+    enriched_task = f"{project_summary} Instruction: {request.instruction}"
+
+    plan = await _orchestrator.plan(enriched_task)
+    go_ctx = _parse_go_context(request.project_files)
+
+    _hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
+    _model_1 = os.getenv("LLM_MODEL_1", "")
+    _model_2 = os.getenv("LLM_MODEL_2", "")
+
+    all_artifacts = []
+    errors: list[str] = []
+    summaries: list[str] = []
+
+    for task_spec in plan.tasks:
+        agent_name = task_spec.get("agent", "")
+        skill_name = task_spec.get("skill", "")
+
+        if agent_name not in _orchestrator.agents:
+            errors.append(f"Unknown agent: {agent_name}")
+            continue
+
+        agent = _orchestrator.agents[agent_name]
+
+        try:
+            params: dict[str, Any] = {}
+
+            if _hf_token and _model_1 and _model_2:
+                try:
+                    from app.llm.dual_extractor import extract_params_dual
+                    skill_obj = agent.get_skill(skill_name)
+                    required = [p for p in skill_obj.schema()["parameters"] if p.get("required", True)]
+                    extracted = await extract_params_dual(
+                        skill_name=skill_name,
+                        task=enriched_task,
+                        required_params=required,
+                        system_prompt=agent.system_prompt,
+                        token=_hf_token,
+                        model_1=_model_1,
+                        model_2=_model_2,
+                    )
+                    if extracted:
+                        params = extracted
+                except Exception:
+                    pass
+
+            if not params:
+                params = _fallback_params(skill_name, request.instruction, go_ctx)
+
+            skill_result = await agent.execute_skill(skill_name, **params)
+            all_artifacts.extend(skill_result.artifacts)
+            summaries.append(
+                f"{'✓' if skill_result.success else '✗'} [{agent_name}] {skill_name}: {skill_result.summary}"
+            )
+            if not skill_result.success and skill_result.error:
+                errors.append(f"{agent_name}.{skill_name}: {skill_result.error}")
+
+        except Exception as exc:
+            errors.append(f"{agent_name}.{skill_name}: {exc}")
+
+    return {
+        "success": len(errors) == 0,
+        "instruction": request.instruction,
+        "project_type": request.project_type,
+        "plan": plan.analysis,
+        "artifacts": [
+            {
+                "filename": a.filename,
+                "content": a.content,
+                "language": a.language,
+                "description": a.description,
+            }
+            for a in all_artifacts
+        ],
+        "errors": errors,
+        "summary": "\n".join(summaries),
     }
 
 
