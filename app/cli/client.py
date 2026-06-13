@@ -69,3 +69,20 @@ class AgentsClient:
             )
             r.raise_for_status()
             return r.json()
+
+    def improve(
+        self,
+        instruction: str,
+        project_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/improve",
+                json={
+                    "instruction": instruction,
+                    "project_files": project_context.get("files", []),
+                    "project_type": project_context.get("project_type", "unknown"),
+                },
+            )
+            r.raise_for_status()
+            return r.json()
