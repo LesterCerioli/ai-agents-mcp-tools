@@ -1,3 +1,4 @@
+from .architecture_pattern_selector import ArchitecturePatternSelector
 from .base import BaseArchitectureAgent
 from .business_objective_parser import BusinessObjectiveParserAgent
 from .decision_engine import SolutionArchitectureDecisionEngine
@@ -12,6 +13,7 @@ from .system import (
 )
 
 __all__ = [
+    "ArchitecturePatternSelector",
     "BaseArchitectureAgent",
     "BusinessObjectiveParserAgent",
     "SolutionArchitectureDecisionEngine",

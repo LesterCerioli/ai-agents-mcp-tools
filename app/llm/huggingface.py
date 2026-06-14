@@ -12,6 +12,7 @@ RECOMMENDED_MODELS: dict[str, str] = {
     "deepseek-coder": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
     "codellama": "codellama/CodeLlama-13b-Instruct-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.3",
+    "go": "LesterCerioli/LLM-GO",
 }
 
 

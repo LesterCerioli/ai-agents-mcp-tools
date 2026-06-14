@@ -56,44 +56,6 @@ class GoGenerateMigrationSkill(BaseSkill):
             f"DROP TABLE IF EXISTS {table} CASCADE;\n"
         )
 
-        migrate_main = (
-            "package main\n\n"
-            "import (\n"
-            "\t\"log\"\n"
-            "\t\"os\"\n\n"
-            "\t\"github.com/golang-migrate/migrate/v4\"\n"
-            "\t_ \"github.com/golang-migrate/migrate/v4/database/postgres\"\n"
-            "\t_ \"github.com/golang-migrate/migrate/v4/source/file\"\n"
-            ")\n\n"
-            "func main() {\n"
-            "\tdbURL := os.Getenv(\"DATABASE_URL\")\n"
-            "\tif dbURL == \"\" {\n"
-            "\t\tlog.Fatal(\"DATABASE_URL is required\")\n"
-            "\t}\n\n"
-            "\tm, err := migrate.New(\"file://migrations\", dbURL)\n"
-            "\tif err != nil {\n"
-            "\t\tlog.Fatalf(\"init migrate: %v\", err)\n"
-            "\t}\n\n"
-            "\tdirection := \"up\"\n"
-            "\tif len(os.Args) > 1 {\n"
-            "\t\tdirection = os.Args[1]\n"
-            "\t}\n\n"
-            "\tswitch direction {\n"
-            "\tcase \"up\":\n"
-            "\t\tif err := m.Up(); err != nil && err != migrate.ErrNoChange {\n"
-            "\t\t\tlog.Fatalf(\"migrate up: %v\", err)\n"
-            "\t\t}\n"
-            "\tcase \"down\":\n"
-            "\t\tif err := m.Down(); err != nil && err != migrate.ErrNoChange {\n"
-            "\t\t\tlog.Fatalf(\"migrate down: %v\", err)\n"
-            "\t\t}\n"
-            "\tdefault:\n"
-            "\t\tlog.Fatalf(\"unknown direction: %s\", direction)\n"
-            "\t}\n"
-            "\tlog.Println(\"migration complete\")\n"
-            "}\n"
-        )
-
         return SkillResult(
             success=True,
             summary=f"Generated up/down SQL migrations for `{table}`",
@@ -110,18 +72,10 @@ class GoGenerateMigrationSkill(BaseSkill):
                     language="sql",
                     description=f"Drop {table} table",
                 ),
-                CodeArtifact(
-                    filename="cmd/migrate/main.go",
-                    content=migrate_main,
-                    language="go",
-                    description="golang-migrate CLI runner",
-                ),
             ],
-            dependencies=["github.com/golang-migrate/migrate/v4"],
             instructions=[
-                "Place SQL files in migrations/",
-                "Run `make migrate-up` to apply",
-                "Run `make migrate-down` to roll back",
+                "Migrations are applied automatically via initializers.RunMigrations(db) in main.go (GORM AutoMigrate)",
+                "SQL files in migrations/ are for reference and manual rollback only",
             ],
         )
 
