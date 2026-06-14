@@ -21,8 +21,12 @@ class OrchestratorPlan:
 
 
 class AgentOrchestrator:
-    
-    def __init__(self, llm: "BaseLLMProvider | None" = None):
+
+    def __init__(
+        self,
+        llm: "BaseLLMProvider | None" = None,
+        go_llm: "BaseLLMProvider | None" = None,
+    ):
         self.llm = llm
         self.agents: dict[str, BaseAgent] = {
             "nextjs": NextJSAgent(llm=llm),
@@ -30,7 +34,7 @@ class AgentOrchestrator:
             "frontend": FrontendAgent(llm=llm),
             "vercel": VercelAgent(llm=llm),
             "backend": BackendAgent(llm=llm),
-            "go": GoAgent(llm=llm),
+            "go": GoAgent(llm=go_llm or llm),
         }
         self._bm25 = SkillBM25Index()
         self._bm25.build(

@@ -296,31 +296,10 @@ class WorkflowCoordinator:
         return artifacts
 
     async def _backend_from_go(self, agent, resources: list[str], framework: str = "fiber") -> list[CodeArtifact]:
-        
-        artifacts: list[CodeArtifact] = []
-        framework = framework or "fiber"
-        for resource in resources:
-            r = resource.lower().replace(" ", "_").replace("-", "_")
-            for skill_name, params in [
-                ("go.go_struct", {"resource": r}),
-                ("go.repository", {"resource": r}),
-                ("go.service", {"resource": r}),
-                (f"go.{framework}_handler", {"resource": r}),
-                (f"go.{framework}_routes", {"resource": r}),
-            ]:
-                try:
-                    result = await agent.execute_skill(skill_name, **params)
-                    if result.success:
-                        artifacts.extend(result.artifacts)
-                except Exception:
-                    pass
-        try:
-            result = await agent.execute_skill("go.docker_setup", app_name="app", services="postgres")
-            if result.success:
-                artifacts.extend(result.artifacts)
-        except Exception:
-            pass
-        return artifacts
+        # Go file generation is handled entirely by the Medical-App-Core skill set
+        # called from the scaffold endpoint's skill_calls block. Return empty here
+        # to avoid duplicating or overwriting those artifacts.
+        return []
 
     async def _backend_from_microservices(
         self, agent, design: MicroservicesSystemDesign

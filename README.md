@@ -142,7 +142,7 @@ CLI → POST /workflow/scaffold
   ┌──────────────────┬──────────────────────┐
   │  GoAgent         │  NextJSAgent          │
   │  BackendAgent    │  DesignAgent          │
-  │  (27 Go skills)  │  FrontendAgent        │
+  │  (31 Go skills)  │  FrontendAgent        │
   │                  │  VercelAgent          │
   └──────────────────┴──────────────────────┘
          │
@@ -157,14 +157,14 @@ CLI → POST /workflow/scaffold
 
 | Agent | Skills | Focus |
 |-------|--------|-------|
-| `go` | 27 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
+| `go` | 31 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
 | `backend` | 6 | Python/FastAPI — endpoints, SQLAlchemy, repository pattern, Docker |
 | `nextjs` | 25 | App Router, API routes, server actions, layouts, data fetching |
 | `design` | 17 | UI components, design systems, dark mode, accessibility |
 | `frontend` | 13 | State management, hooks, forms, animations, performance |
 | `vercel` | 5 | Deployment, environment config, edge functions |
 
-**Total: 93 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
+**Total: 97 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
 
 ---
 
@@ -187,7 +187,7 @@ This application                          Hugging Face Inference API
 
 ### Skill Routing — BM25 (zero cost, zero API calls)
 
-Skill selection uses an **in-memory BM25 index** built at startup from the `name + description + tags` of all 93 skills. No LLM call is needed to decide which skill to invoke.
+Skill selection uses an **in-memory BM25 index** built at startup from the `name + description + tags` of all 97 skills. No LLM call is needed to decide which skill to invoke.
 
 ```
 "build a Go microservice with JWT auth"
@@ -258,8 +258,8 @@ The CLI scans the project structure locally (detecting Go, Next.js, Python, or R
 ### Other commands
 
 ```bash
-agents list-skills             # list all 93 skills
-agents list-skills --agent go  # filter by agent
+agents list-skills             # list all 97 skills
+agents list-skills --agent go  # filter by agent (31 Go skills)
 agents version                 # CLI version + API status
 ```
 
@@ -330,7 +330,7 @@ GET /health    — agent count, skill count, LLM status, MCP server list
 
 ```
 GET /agents                   — list all agents and their skill counts
-GET /skills                   — list all 93 skills
+GET /skills                   — list all 97 skills
 GET /skills?agent=go          — skills for a specific agent
 GET /skills?category=backend
 GET /skills?tag=fiber
@@ -431,8 +431,16 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
         ↓
 [SolutionFlowDiagramAgent] → [ValidationAgent]
         ↓
+[ArchitecturePatternSelector]           ← NEW (Issue #14)
+  — Fitness scoring matrix: 5 dimensions × 3 design partners
+  — Deterministic weighted score per partner (no LLM call)
+  — Hybrid activation: Microservices + Hexagonal when both score ≥ 0.65
+    and score gap ≤ 0.15
+  — Produces DesignPartnerPlan with per-partner scores + rejection reasons
+        ↓
 [DesignPartnerOrchestrator]
-  — Hexagonal | Microservices | Monolith design partner
+  — Routes to: Hexagonal | Microservices | Monolith design partner
+  — Hybrid mode: activates both Microservices + Hexagonal in sequence
         ↓
 [WorkflowCoordinator]
   — Routes to GoAgent or BackendAgent based on backend_language
@@ -454,7 +462,62 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
 
 ---
 
-## GoAgent — 27 Skills
+### Architecture Pattern Selector (Issue #14)
+
+`ArchitecturePatternSelector` runs a **deterministic weighted fitness scoring matrix** across 5 signal dimensions and 3 design partners, producing a `DesignPartnerPlan` with full per-partner scores and rejection reasons. No LLM call is required.
+
+#### Scoring Matrix
+
+| Dimension | Weight | Microservices | Hexagonal | Monolith |
+|---|---|---|---|---|
+| `scalability_demand` | 30 % | 0.95 | 0.48 | 0.18 |
+| `domain_complexity` | 25 % | 0.62 | 0.95 | 0.28 |
+| `large_team` | 20 % | 0.88 | 0.60 | 0.12 |
+| `operational_maturity` | 15 % | 0.90 | 0.65 | 0.22 |
+| `time_to_market_pressure` | 10 % | 0.12 | 0.38 | 0.92 |
+
+Each partner's raw score is normalised against its theoretical maximum so comparisons are meaningful across partners with different aptitude ceilings.
+
+#### Hybrid Activation
+
+When both **Microservices** and **Hexagonal** score ≥ 0.65 normalised *and* their gap is ≤ 0.15, both partners are activated in sequence (`activation_order` 1 and 2). This is the only supported hybrid pair.
+
+#### DesignPartnerPlan schema
+
+```json
+{
+  "plan_id": "uuid",
+  "decision_id": "uuid",
+  "is_hybrid": false,
+  "scoring_deterministic": true,
+  "selected_partners": [
+    {
+      "partner_name": "microservices_design_partner",
+      "activation_order": 1,
+      "rationale": "...",
+      "configuration": { "parameters": {} }
+    }
+  ],
+  "rationale": {
+    "summary": "...",
+    "primary_signals": ["scalability_demand", "large_team"],
+    "hybrid_reason": null,
+    "per_partner_scores": [
+      {
+        "partner_name": "microservices_design_partner",
+        "fitness_score": 0.847,
+        "selected": true,
+        "rejection_reason": null,
+        "dimension_scores": [...]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## GoAgent — 31 Skills
 
 ### Shared Skills (framework-agnostic)
 
@@ -470,6 +533,41 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
 | `go.config` | Config struct + viper loader for env/YAML |
 | `go.logger` | Structured logging setup with uber-go/zap + request-scoped middleware |
 
+### Medical-App-Core Pattern Skills (NEW)
+
+Four additive skills that model the production patterns from the Medical-App-Core reference project — **Fiber v2 + GORM + PostgreSQL + Swagger + godotenv** — so the platform can generate complete, production-ready Go services without any dependency on the HuggingFace API.
+
+| Skill | Shortcut | Generates |
+|---|---|---|
+| `go.fiber_full_project` | `full_project` | Complete project scaffold: `go.mod` (Fiber v2 + GORM + JWT v4 + Swagger + godotenv + uuid), `cmd/main.go` with 5-step init sequence (godotenv → InitialDB → RunMigrations → InitServices → Fiber → Swagger → routes → Listen), `.env.example`, `Makefile` |
+| `go.initializers` | `initializers` | Centralised `initializers/` package: `database.go` (GORM + PostgreSQL connection pool, MaxOpenConns=50), `services.go` (Services DI container + `InitServices(db)`), `migrations.go` (uuid-ossp extension + `AutoMigrate`), `validators.go` (CPF, SSN, CNPJ, NPI) |
+| `go.gorm_entity` | `entity` | `domain/entities/{resource}.go` (GORM entity, UUID primary key via `uuid_generate_v4()`, gorm.Model embedding), `services/contracts/{resource}ContractService.go` (service interface), `domain/dtos/{resource}DTO.go` (InputDTO + DTO) |
+| `go.swagger_fiber` | `swagger` | `internal/app/swagger.go` (Swagger UI at `/swagger/*` with HTTP basic auth from env vars), `controllers/{resource}Controller.go` (annotated with swaggo `@Summary`, `@Param`, `@Success`, `@Security BearerAuth`), `docs/docs.go` stub (replaced by `swag init`) |
+
+**Example — scaffold a full service in one command:**
+
+```bash
+agents generate "Go medical records API with Fiber, PostgreSQL, JWT auth, and Swagger" \
+  --name medical-api --language go --framework fiber
+```
+
+Or execute the skills directly in sequence:
+
+```http
+POST /skills/execute
+{ "agent": "go", "skill": "go.fiber_full_project",
+  "params": { "module_name": "github.com/org/medical-api", "app_name": "Medical API", "port": "3040" } }
+
+POST /skills/execute
+{ "agent": "go", "skill": "go.initializers",
+  "params": { "module_name": "github.com/org/medical-api", "resources": "patient,appointment,doctor" } }
+
+POST /skills/execute
+{ "agent": "go", "skill": "go.gorm_entity",
+  "params": { "resource": "patient", "module_name": "github.com/org/medical-api",
+               "fields": "name:string,birth_date:time,cpf:string,active:bool" } }
+```
+
 ### HTTP Framework Skills
 
 | Framework | Skills |
@@ -484,12 +582,14 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
 
 | Concern | Library |
 |---|---|
-| Database | `jackc/pgx/v5` |
+| Database (pgx pattern) | `jackc/pgx/v5` |
+| Database (GORM pattern) | `gorm.io/gorm` + `gorm.io/driver/postgres` |
 | Validation | `go-playground/validator/v10` |
-| Auth / JWT | `golang-jwt/jwt/v5` |
+| Auth / JWT | `golang-jwt/jwt/v4` (GORM pattern) · `golang-jwt/jwt/v5` (pgx pattern) |
+| ORM / Migrations | `gorm.io/gorm` AutoMigrate · `golang-migrate/migrate/v4` |
+| API Docs | `swaggo/swag` + `gofiber/swagger` |
+| Config / Env | `spf13/viper` · `joho/godotenv` |
 | Testing | `testify/suite` + `mockery` |
-| Migrations | `golang-migrate/migrate/v4` |
-| Config | `spf13/viper` |
 | Logging | `uber-go/zap` |
 
 ---
@@ -540,7 +640,19 @@ app/
 │   ├── base.py                  # BaseSkill, SkillResult, CodeArtifact, SkillCategory
 │   ├── registry.py              # SkillRegistry — @SkillRegistry.register decorator
 │   ├── go/
-│   │   ├── shared/              # setup_project, go_struct, repository, service, …
+│   │   ├── shared/
+│   │   │   ├── setup_project.py     # go.setup_project + go.fiber_full_project (NEW)
+│   │   │   ├── go_struct.py
+│   │   │   ├── repository.py
+│   │   │   ├── service.py
+│   │   │   ├── docker_setup.py
+│   │   │   ├── test_suite.py
+│   │   │   ├── migration.py
+│   │   │   ├── config.py
+│   │   │   ├── logger.py
+│   │   │   ├── initializers.py      # NEW — go.initializers (centralised DI package)
+│   │   │   ├── gorm_entity.py       # NEW — go.gorm_entity (GORM entity + contract + DTOs)
+│   │   │   └── swagger.py           # NEW — go.swagger_fiber (Swagger UI + basicauth)
 │   │   └── http/                # fiber, gin, gorilla, echo, chi
 │   ├── backend/                 # fastapi_endpoint, sqlalchemy_model, …
 │   ├── nextjs/                  # components, routing, data_fetching, auth, …
@@ -553,10 +665,16 @@ app/
 │   │   ├── decision_engine.py
 │   │   ├── solution_flow_diagram.py
 │   │   ├── validation_agent.py
+│   │   ├── architecture_pattern_selector.py  # NEW — fitness scoring matrix + hybrid activation
 │   │   └── system/              # hexagonal, microservices, monolith design partners
 │   ├── context/
 │   │   └── pipeline_context.py  # PipelineContext — shared state across pipeline
-│   ├── schemas/                 # requirements, solution, system_design, workflow
+│   ├── schemas/
+│   │   ├── requirements.py      # ArchitectureRequirements
+│   │   ├── solution.py          # SolutionArchitectureDecision
+│   │   ├── system_design.py
+│   │   ├── workflow.py
+│   │   └── design_partner_plan.py  # NEW — DesignPartnerPlan, PartnerScore, PartnerActivation
 │   └── workflow_coordinator.py  # End-to-end pipeline + code generation router
 ├── cli/
 │   ├── commands.py              # Typer CLI — generate, improve, list-skills, version
