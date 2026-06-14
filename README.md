@@ -217,11 +217,51 @@ If both models fail (network error, invalid JSON, missing fields), the fallback 
 
 ## CLI Reference
 
-Install the CLI binary:
+### Installation
+
+#### Linux / macOS
+
+Open a terminal and run:
 
 ```bash
 curl -fsSL https://ai-agents-mcp-tools.onrender.com/cli/install.sh | bash
 ```
+
+The script detects your OS, downloads the binary to `/usr/local/bin/agents`, and makes it executable. Verify the installation:
+
+```bash
+agents version
+```
+
+#### Windows
+
+1. Open **PowerShell** (run as Administrator is not required).
+2. Download the binary:
+
+```powershell
+Invoke-WebRequest -Uri "https://ai-agents-mcp-tools.onrender.com/cli/download/windows" `
+  -OutFile "$env:USERPROFILE\agents.exe"
+```
+
+3. Move it to a directory that is in your `PATH`, for example:
+
+```powershell
+Move-Item "$env:USERPROFILE\agents.exe" "C:\Windows\System32\agents.exe"
+```
+
+Or add the folder where you saved `agents.exe` to your user `PATH`:
+
+```powershell
+$env:PATH += ";$env:USERPROFILE"
+```
+
+4. Verify the installation (open a new terminal):
+
+```powershell
+agents version
+```
+
+> **Note:** If Windows Defender blocks the binary, click **More info → Run anyway**, or add an exclusion for the file in Windows Security settings.
 
 ### Generate a new project
 
