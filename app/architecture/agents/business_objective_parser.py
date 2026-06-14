@@ -1,5 +1,8 @@
 import json
+import logging
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 from pydantic import ValidationError
 
@@ -176,6 +179,9 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
             response = await self.llm.chat(prompt, system_prompt=self.system_prompt)  # type: ignore[union-attr]
             return json.loads(response)
         except json.JSONDecodeError:
+            return self._extractor.extract(text)
+        except Exception:
+            logger.warning("LLM unavailable in objective parser, falling back to keyword extraction")
             return self._extractor.extract(text)
 
     def _build_requirements(self, raw_input: str, data: dict[str, Any]) -> ArchitectureRequirements:

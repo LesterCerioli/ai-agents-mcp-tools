@@ -1,3 +1,11 @@
+from .design_partner_plan import (
+    DesignPartnerPlan,
+    PartnerActivation,
+    PartnerConfiguration,
+    PartnerDimensionScore,
+    PartnerScore,
+    SelectionRationale,
+)
 from .requirements import (
     ArchitectureRequirements,
     AvailabilityRequirement,
@@ -32,6 +40,12 @@ from .solution import (
 )
 
 __all__ = [
+    "DesignPartnerPlan",
+    "PartnerActivation",
+    "PartnerConfiguration",
+    "PartnerDimensionScore",
+    "PartnerScore",
+    "SelectionRationale",
     "ArchitectureRequirements",
     "AvailabilityRequirement",
     "BudgetConstraint",

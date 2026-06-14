@@ -22,38 +22,51 @@ class GoAgent(BaseAgent):
     system_prompt = _GO_EXPERT
 
     SKILL_SHORTCUTS = {
-        "setup": "go.setup_project",
-        "struct": "go.go_struct",
-        "repo": "go.repository",
-        "service": "go.service",
-        "docker": "go.docker_setup",
-        "tests": "go.test_suite",
-        "migrate": "go.generate_migration",
-        "config": "go.config",
-        "logger": "go.logger",
         
-        "fiber_app": "go.fiber_app",
-        "fiber_handler": "go.fiber_handler",
-        "fiber_routes": "go.fiber_routes",
+        "full_project":       "go.fiber_full_project",
+        "initializers":       "go.initializers",
+        "entity":             "go.gorm_entity",
+        "repo_contract":      "go.repository_contract",
+        "repo_impl":          "go.repository_impl",
+        "service_impl":       "go.service_impl",
+        "controller":         "go.controller",
+        "swagger":            "go.swagger_fiber",
+
+        
+        "docker":    "go.docker_setup",
+        "migrate":   "go.generate_migration",
+        "config":    "go.config",
+        "logger":    "go.logger",
+
+        
+        "setup":    "go.setup_project",
+        "struct":   "go.go_struct",
+        "repo":     "go.repository",
+        "service":  "go.service",
+        "tests":    "go.test_suite",
+
+        "fiber_app":        "go.fiber_app",
+        "fiber_handler":    "go.fiber_handler",
+        "fiber_routes":     "go.fiber_routes",
         "fiber_middleware": "go.fiber_middleware",
-        
-        "gin_app": "go.gin_app",
-        "gin_handler": "go.gin_handler",
-        "gin_routes": "go.gin_routes",
-        "gin_middleware": "go.gin_middleware",
-        
-        "gorilla_app": "go.gorilla_app",
+
+        "gin_app":       "go.gin_app",
+        "gin_handler":   "go.gin_handler",
+        "gin_routes":    "go.gin_routes",
+        "gin_middleware":"go.gin_middleware",
+
+        "gorilla_app":     "go.gorilla_app",
         "gorilla_handler": "go.gorilla_handler",
-        "gorilla_routes": "go.gorilla_routes",
-        
-        "echo_app": "go.echo_app",
-        "echo_handler": "go.echo_handler",
-        "echo_routes": "go.echo_routes",
-        "echo_middleware": "go.echo_middleware",
-        
-        "chi_app": "go.chi_app",
+        "gorilla_routes":  "go.gorilla_routes",
+
+        "echo_app":       "go.echo_app",
+        "echo_handler":   "go.echo_handler",
+        "echo_routes":    "go.echo_routes",
+        "echo_middleware":"go.echo_middleware",
+
+        "chi_app":     "go.chi_app",
         "chi_handler": "go.chi_handler",
-        "chi_routes": "go.chi_routes",
+        "chi_routes":  "go.chi_routes",
     }
 
     async def quick(self, shortcut: str, **params) -> "AgentResult":

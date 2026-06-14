@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 _orchestrator = None
 _workflow_coordinator = None
+_go_llm = None
 _architecture_sessions: dict[str, Any] = {}
 _session_locks: dict[str, asyncio.Lock] = {}
 _sessions_creation_lock = asyncio.Lock()
@@ -36,19 +37,23 @@ async def _get_or_create_session(session_id: str | None, pipeline_context_cls: t
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _orchestrator, _workflow_coordinator
+    global _orchestrator, _workflow_coordinator, _go_llm
     from app.llm.huggingface import HuggingFaceProvider
     from app.agents.orchestrator import AgentOrchestrator
     from app.architecture.workflow_coordinator import WorkflowCoordinator
 
     token = os.getenv("HUGGINGFACE_TOKEN")
     model = os.getenv("LLM_MODEL_1")
+    go_model = os.getenv("LLM_MODEL_GO")
 
     llm = HuggingFaceProvider(token=token, model=model) if token else None
-    _orchestrator = AgentOrchestrator(llm=llm)
+    _go_llm = HuggingFaceProvider(token=token, model=go_model) if token and go_model else llm
+    _orchestrator = AgentOrchestrator(llm=llm, go_llm=_go_llm)
     _workflow_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=llm)
 
+    go_label = go_model if go_model else "fallback to LLM_MODEL_1"
     print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
+    print(f"✓ Go agent LLM: {go_label if token else 'disabled (no token)'}")
     print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate")
     yield
 
@@ -496,9 +501,17 @@ async def workflow_scaffold(request: ScaffoldRequest):
         output_path.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         raise HTTPException(400, f"Cannot create output directory '{output_path}': {e}")
-    
+
+    from app.architecture.workflow_coordinator import WorkflowCoordinator
+    is_go_backend = request.backend_language == "go" and _go_llm is not None
+    active_coordinator = (
+        WorkflowCoordinator(orchestrator=_orchestrator, llm=_go_llm)
+        if is_go_backend
+        else _workflow_coordinator
+    )
+
     try:
-        workflow_output = await _workflow_coordinator.run(
+        workflow_output = await active_coordinator.run(
             objective=request.objective,
             scope=scope,
             backend_language=request.backend_language,
@@ -506,31 +519,29 @@ async def workflow_scaffold(request: ScaffoldRequest):
             forced_pattern=request.architecture_pattern,
         )
     except Exception as e:
-        # If LLM fails (e.g. token permissions), retry with rule-based mode
-        if "403" in str(e) or "permission" in str(e).lower() or "Forbidden" in str(e):
-            logger.warning("LLM unavailable, falling back to rule-based pipeline")
-            from app.architecture.workflow_coordinator import WorkflowCoordinator
-            fallback_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=None)
-            try:
-                workflow_output = await fallback_coordinator.run(
-                    objective=request.objective,
-                    scope=scope,
-                    backend_language=request.backend_language,
-                    backend_framework=request.backend_framework,
-                    forced_pattern=request.architecture_pattern,
-                )
-            except Exception as fallback_exc:
-                logger.exception("Scaffold fallback also failed")
-                raise HTTPException(500, f"Pipeline failed: {fallback_exc}") from fallback_exc
-        else:
-            logger.exception("Scaffold workflow failed")
-            raise HTTPException(500, f"Architecture pipeline failed: {e}") from e
+        # Any failure from the LLM-backed coordinator triggers the rule-based fallback.
+        # This covers 403 (permissions), 503 (overload), timeouts, and connection errors.
+        logger.warning("LLM coordinator failed (%s), falling back to rule-based pipeline", e)
+        from app.architecture.workflow_coordinator import WorkflowCoordinator
+        fallback_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=None)
+        try:
+            workflow_output = await fallback_coordinator.run(
+                objective=request.objective,
+                scope=scope,
+                backend_language=request.backend_language,
+                backend_framework=request.backend_framework,
+                forced_pattern=request.architecture_pattern,
+            )
+        except Exception as fallback_exc:
+            logger.exception("Scaffold fallback also failed")
+            raise HTTPException(500, f"Pipeline failed: {fallback_exc}") from fallback_exc
 
-    domain = (
-        workflow_output.architecture_pattern.lower().replace("_", "-")
-        if workflow_output.architecture_pattern
-        else request.project_name
-    )
+    # Derive the primary resource name from the project name, stripping common
+    # framework/type suffixes so "go-bank" → "bank", "user-service" → "user".
+    _stop = {"go", "service", "api", "app", "server", "backend", "ms", "msc", "core"}
+    _parts = request.project_name.lower().replace("_", "-").split("-")
+    _meaningful = [p for p in _parts if p not in _stop]
+    domain = _meaningful[0] if _meaningful else _parts[-1]
 
     
     
@@ -576,22 +587,19 @@ async def workflow_scaffold(request: ScaffoldRequest):
 
     if scope in (WorkflowScope.BACKEND, WorkflowScope.FULLSTACK):
         if request.backend_language == "go":
-            fw = request.backend_framework or "fiber"
             go_agent = _orchestrator.agents["go"]
+            mod = f"github.com/org/{request.project_name}"
             skill_calls += [
-                (go_agent, "go.setup_project",        {"module_name": f"github.com/org/{request.project_name}", "app_name": request.project_name, "framework": fw}),
-                (go_agent, "go.go_struct",            {"resource": domain}),
-                (go_agent, "go.repository",           {"resource": domain, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, "go.service",              {"resource": domain, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, f"go.{fw}_app",            {"app_name": request.project_name, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, f"go.{fw}_handler",        {"resource": domain, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, f"go.{fw}_routes",         {"resource": domain, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, f"go.{fw}_middleware",     {"module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, "go.test_suite",           {"resource": domain, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, "go.generate_migration",   {"resource": domain}),
-                (go_agent, "go.docker_setup",         {"app_name": request.project_name, "services": "postgres,redis"}),
-                (go_agent, "go.config",               {"app_name": request.project_name, "module_name": f"github.com/org/{request.project_name}"}),
-                (go_agent, "go.logger",               {}),
+                (go_agent, "go.fiber_full_project",  {"module_name": mod, "app_name": request.project_name, "resource": domain}),
+                (go_agent, "go.initializers",        {"module_name": mod, "resources": domain, "app_name": request.project_name}),
+                (go_agent, "go.gorm_entity",         {"resource": domain, "module_name": mod}),
+                (go_agent, "go.repository_contract", {"resource": domain, "module_name": mod}),
+                (go_agent, "go.repository_impl",     {"resource": domain, "module_name": mod}),
+                (go_agent, "go.service_impl",        {"resource": domain, "module_name": mod}),
+                (go_agent, "go.controller",          {"resource": domain, "module_name": mod}),
+                (go_agent, "go.swagger_fiber",       {"module_name": mod, "app_name": request.project_name}),
+                (go_agent, "go.docker_setup",        {"app_name": request.project_name, "services": "postgres,redis"}),
+                (go_agent, "go.generate_migration",  {"resource": domain}),
             ]
         else:
             skill_calls += [
@@ -682,6 +690,24 @@ def _fallback_params(skill_name: str, instruction: str, go_ctx: dict[str, Any]) 
         resource = app_name.split("-")[0]
 
     s = skill_name.lower()
+    # Medical-App-Core pattern skills
+    if "fiber_full_project" in s:
+        return {"module_name": module_name, "app_name": app_name}
+    if "initializers" in s:
+        return {"module_name": module_name, "resources": resource, "app_name": app_name}
+    if "gorm_entity" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "repository_contract" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "repository_impl" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "service_impl" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "controller" in s:
+        return {"resource": resource, "module_name": module_name}
+    if "swagger_fiber" in s:
+        return {"module_name": module_name, "app_name": app_name}
+    # Legacy / generic skills
     if "setup_project" in s:
         return {"module_name": module_name, "app_name": app_name, "framework": framework}
     if "test_suite" in s:
@@ -741,6 +767,7 @@ async def workflow_improve(request: ImproveRequest):
     _hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
     _model_1 = os.getenv("LLM_MODEL_1", "")
     _model_2 = os.getenv("LLM_MODEL_2", "")
+    _model_go = os.getenv("LLM_MODEL_GO", "")
 
     all_artifacts = []
     errors: list[str] = []
@@ -759,7 +786,9 @@ async def workflow_improve(request: ImproveRequest):
         try:
             params: dict[str, Any] = {}
 
-            if _hf_token and _model_1 and _model_2:
+            primary_model = _model_go if (agent_name == "go" and _model_go) else _model_1
+
+            if _hf_token and primary_model and _model_2:
                 try:
                     from app.llm.dual_extractor import extract_params_dual
                     skill_obj = agent.get_skill(skill_name)
@@ -770,7 +799,7 @@ async def workflow_improve(request: ImproveRequest):
                         required_params=required,
                         system_prompt=agent.system_prompt,
                         token=_hf_token,
-                        model_1=_model_1,
+                        model_1=primary_model,
                         model_2=_model_2,
                     )
                     if extracted:
