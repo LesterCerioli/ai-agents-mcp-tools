@@ -101,6 +101,7 @@ class WorkflowCoordinator:
         if ctx.system_design is not None or ctx.decision is not None:
             await self._run_solid_analysis(ctx)
             await self._run_pattern_recommendation(ctx)
+            await self._run_quality_assessment(ctx)
 
         system_design = ctx.system_design
         pattern_name = (
@@ -181,6 +182,20 @@ class WorkflowCoordinator:
             solid_report = ctx.metadata.get("solid_compliance_report")
             report = await dp_agent.recommend(ctx, solid_report=solid_report)
             ctx.metadata["pattern_recommendation_report"] = report
+        except Exception:
+            pass
+
+    async def _run_quality_assessment(self, ctx: PipelineContext) -> None:
+        """Auto-trigger quality assessment after SOLID + pattern analysis."""
+        from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
+        qa_agent = self._orchestrator.agents.get("quality_assessment")
+        if not isinstance(qa_agent, ArchitectureQualityAssessmentAgent):
+            return
+        try:
+            solid_report = ctx.metadata.get("solid_compliance_report")
+            pattern_report = ctx.metadata.get("pattern_recommendation_report")
+            report = await qa_agent.assess(ctx, solid_report=solid_report, pattern_report=pattern_report)
+            ctx.metadata["quality_assessment_report"] = report
         except Exception:
             pass
 
