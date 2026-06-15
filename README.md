@@ -1,217 +1,6 @@
 # Enterprise AI Agents & MCP Tools
 
-An agentic backend platform that transforms natural-language instructions into production-ready code — either scaffolding new projects from scratch or improving existing ones. Specialized agents cover Go, Python/FastAPI, Next.js, design systems, and Vercel deployments, all coordinated through an architecture pipeline and exposed via a FastAPI REST API, a CLI, and MCP (Model Context Protocol) servers.
-
----
-
-## End-to-End Flow
-
-### `agents improve` — Improving an Existing Project
-
-The primary flow for adding features or improvements to a project already on disk.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              USER'S MACHINE                                     │
-│                                                                                 │
-│  $ agents improve "Add a credit card payment gateway and an API gateway"        │
-│                    --path /path/to/my-project                                   │
-│                                                                                 │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │  CLI  (app/cli/commands.py)                                              │  │
-│  │                                                                          │  │
-│  │  1. Project Scanner (app/cli/project_scanner.py)                        │  │
-│  │     • Walks directory tree                                               │  │
-│  │     • Skips: .git  node_modules  __pycache__  vendor                    │  │
-│  │     • Reads files up to 10 KB each / 150 KB total                       │  │
-│  │     • Detects project type from go.mod / package.json / requirements    │  │
-│  │     → { files: [...], project_type: "go", file_count: 22 }              │  │
-│  │                                                                          │  │
-│  │  2. AgentsClient.improve()  (app/cli/client.py)                         │  │
-│  │     POST /workflow/improve  →  instruction + project_files + type       │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
-│                                    │  HTTP                                      │
-└────────────────────────────────────┼───────────────────────────────────────────┘
-                                     │
-┌────────────────────────────────────▼───────────────────────────────────────────┐
-│                              AGENTS API  (FastAPI)                              │
-│                                                                                 │
-│  /workflow/improve  (app/main.py)                                               │
-│                                                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │  3. Orchestrator.plan()  — BM25 Skill Router                           │   │
-│  │                                                                         │   │
-│  │     "Add a credit card payment gateway and an API gateway in Go"        │   │
-│  │      → BM25 index search (local, microseconds, zero LLM calls)         │   │
-│  │      → [ go.service, go.repository, go.fiber_handler,                  │   │
-│  │           go.fiber_routes, go.test_suite, go.docker_setup, … ]         │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                            │
-│  ┌─────────────────────────────────▼───────────────────────────────────────┐   │
-│  │  4. Dual LLM Param Extractor  (app/llm/dual_extractor.py)              │   │
-│  │                                                                         │   │
-│  │     For each planned skill, both models are called in parallel:         │   │
-│  │                                                                         │   │
-│  │     asyncio.gather(                                                     │   │
-│  │       call(LLM_MODEL_1),   ◀──── meta-llama/Llama-3.1-8B-Instruct     │   │
-│  │       call(LLM_MODEL_2),   ◀──── Qwen/Qwen2.5-Coder-7B-Instruct       │   │
-│  │     )                             via HuggingFace Inference API         │   │
-│  │                                                                         │   │
-│  │     Each response is parsed with a resilient JSON extractor:            │   │
-│  │       • Direct JSON parse                                               │   │
-│  │       • Markdown code-block extraction  (```json ... ```)               │   │
-│  │       • Regex fallback for any { } object in the text                  │   │
-│  │                                                                         │   │
-│  │     _score() compares responses:                                        │   │
-│  │       • Counts required params filled with non-empty values             │   │
-│  │       • Winner = higher coverage of required parameters                 │   │
-│  │       → best_params = { "resource": "pagamento", "module": "..." }     │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                            │
-│  ┌─────────────────────────────────▼───────────────────────────────────────┐   │
-│  │  5. Fallback Param Extraction  (only if dual extractor returns empty)   │   │
-│  │                                                                         │   │
-│  │     _parse_go_context()  →  reads go.mod for module_name, framework    │   │
-│  │     _fallback_params()   →  infers resource name from instruction text  │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                    │                                            │
-│  ┌─────────────────────────────────▼───────────────────────────────────────┐   │
-│  │  6. Agent.execute_skill(skill_name, **params)                           │   │
-│  │                                                                         │   │
-│  │     Go skills  →  template-based generation (fast, deterministic)       │   │
-│  │     Next.js / Design / Frontend skills                                  │   │
-│  │                  →  LLM code generation via HuggingFace                 │   │
-│  │                                                                         │   │
-│  │     Returns: [ CodeArtifact(filename, content, language), … ]          │   │
-│  └─────────────────────────────────────────────────────────────────────────┘   │
-│                                                                                 │
-│  Response → { artifacts: [...], success: true, summary: "..." }                │
-└────────────────────────────────────┬───────────────────────────────────────────┘
-                                     │  HTTP response
-┌────────────────────────────────────▼───────────────────────────────────────────┐
-│                              USER'S MACHINE                                     │
-│                                                                                 │
-│  7. Platform Agent  (app/cli/platforms/linux.py | windows.py)                  │
-│     • Receives artifacts from API response                                      │
-│     • Resolves absolute paths relative to project root                         │
-│     • Creates missing directories                                               │
-│     • Writes each file to disk                                                  │
-│                                                                                 │
-│  8. Files land in the target repository                                         │
-│                                                                                 │
-│     /path/to/my-project/                                                        │
-│     ├── internal/service/payment_gateway_service.go    ← NEW                   │
-│     ├── internal/repository/payment_gateway_repo.go    ← NEW                   │
-│     ├── internal/handler/payment_gateway_handler.go    ← NEW                   │
-│     ├── internal/mocks/mock_payment_gateway_repo.go    ← NEW                   │
-│     ├── internal/service/payment_gateway_test.go       ← NEW                   │
-│     ├── Dockerfile                                     ← NEW                   │
-│     └── docker-compose.yml                             ← NEW                   │
-│                                                                                 │
-│  ✓ Changes written to /path/to/my-project                                      │
-│  13 files written                                                               │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### `agents generate` — Scaffolding a New Project from Scratch
-
-```
-$ agents generate "Go microservice for order management with Fiber, PostgreSQL, JWT"
-                  --name order-service --language go --framework fiber
-
-CLI → POST /workflow/scaffold
-         │
-         ▼
-  Architecture Pipeline
-  ┌─────────────────────────────────┐
-  │ BusinessObjectiveParserAgent    │  — extracts 7 requirement dimensions
-  │          ↓                      │
-  │ SolutionArchitectureDecision    │  — selects pattern (microservices / hexagonal / …)
-  │          ↓                      │
-  │ SolutionFlowDiagramAgent        │
-  │          ↓                      │
-  │ ValidationAgent                 │
-  │          ↓                      │
-  │ DesignPartnerOrchestrator       │  — hexagonal / microservices / monolith partner
-  └─────────────────────────────────┘
-         │
-         ▼
-  Skill Generation (parallel)
-  ┌──────────────────┬──────────────────────┐
-  │  GoAgent         │  NextJSAgent          │
-  │  BackendAgent    │  DesignAgent          │
-  │  (31 Go skills)  │  FrontendAgent        │
-  │                  │  VercelAgent          │
-  └──────────────────┴──────────────────────┘
-         │
-         ▼
-  Platform Agent writes every artifact to disk
-  → /path/to/output/order-service/  (32+ files)
-```
-
----
-
-## Agent Roster
-
-| Agent | Skills | Focus |
-|-------|--------|-------|
-| `go` | 31 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
-| `backend` | 6 | Python/FastAPI — endpoints, SQLAlchemy, repository pattern, Docker |
-| `nextjs` | 25 | App Router, API routes, server actions, layouts, data fetching |
-| `design` | 17 | UI components, design systems, dark mode, accessibility |
-| `frontend` | 13 | State management, hooks, forms, animations, performance |
-| `vercel` | 5 | Deployment, environment config, edge functions |
-
-**Total: 97 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
-
----
-
-## Intelligence Architecture
-
-No model runs inside this application. All LLM inference is delegated to the **Hugging Face Inference API** over HTTP, making the service deployable on minimal infrastructure (0.5 CPU / 512 MB RAM):
-
-```
-This application                          Hugging Face Inference API
-┌───────────────────────────────┐         ┌──────────────────────────────────────┐
-│  FastAPI                      │         │  LLM_MODEL_1                         │
-│  AgentOrchestrator            │──HTTP──▶│  meta-llama/Llama-3.1-8B-Instruct   │
-│  Architecture Pipeline        │         │  (general purpose)                   │
-│  93 Skills                    │         ├──────────────────────────────────────┤
-│  BM25 Skill Router            │──HTTP──▶│  LLM_MODEL_2                         │
-│  Dual LLM Extractor           │◀────────│  Qwen/Qwen2.5-Coder-7B-Instruct     │
-└───────────────────────────────┘         │  (code specialized)                  │
-  RAM: ~150–200 MB  |  LLM RAM: 0 (remote)└──────────────────────────────────────┘
-```
-
-### Skill Routing — BM25 (zero cost, zero API calls)
-
-Skill selection uses an **in-memory BM25 index** built at startup from the `name + description + tags` of all 97 skills. No LLM call is needed to decide which skill to invoke.
-
-```
-"build a Go microservice with JWT auth"
-  → BM25 search (local, microseconds)
-  → go.fiber_handler (0.94), go.fiber_middleware (0.91), go.service (0.87), …
-```
-
-### Dual LLM Parameter Extraction
-
-When the BM25 router selects a skill, both models are queried **in parallel** to extract the required parameters. The response with better coverage of required fields wins:
-
-```
-Instruction: "Add a payment gateway with credit card support"
-Skill selected: go.service  →  requires: resource, module_name
-
-asyncio.gather(
-  LLM_MODEL_1  →  {"resource": "payment_gateway", "module_name": "github.com/org/api"}   score: 2
-  LLM_MODEL_2  →  {"resource": "payment", "module_name": ""}                              score: 1
-)
-
-Winner: LLM_MODEL_1  →  params passed to skill execution
-```
-
-If both models fail (network error, invalid JSON, missing fields), the fallback extractor infers params from `go.mod` and the instruction text — ensuring the pipeline always produces output.
+An agentic backend platform that transforms natural-language instructions into production-ready code — either scaffolding new projects from scratch, improving existing ones, or diagnosing and fixing build/runtime errors. Specialized agents cover Go, Python/FastAPI, Next.js, design systems, Vercel deployments, and diagnostics, all coordinated through an architecture pipeline and exposed via a FastAPI REST API, a CLI, and MCP (Model Context Protocol) servers.
 
 ---
 
@@ -263,7 +52,92 @@ agents version
 
 > **Note:** If Windows Defender blocks the binary, click **More info → Run anyway**, or add an exclusion for the file in Windows Security settings.
 
-### Generate a new project
+---
+
+### Commands
+
+| Command | What it does |
+|---------|-------------|
+| [`agents ask`](#agents-ask) | **Main conversational interface.** Understands any natural language request (PT or EN), shows a plan, asks for confirmation, executes, verifies, and suggests next steps. |
+| [`agents generate`](#agents-generate) | Scaffold a complete new project from a description. |
+| [`agents improve`](#agents-improve) | Add features or apply improvements to an existing project. |
+| [`agents diagnose`](#agents-diagnose) | Explicitly diagnose and fix build/compile/runtime errors. |
+| [`agents list-skills`](#agents-list-skills) | List all available skills with filtering options. |
+| [`agents version`](#agents-version) | Show CLI version and check API connectivity. |
+
+---
+
+### `agents ask`
+
+The primary conversational interface. Type what you want in **English or Portuguese** — the agent classifies your intent, presents a plan, asks for confirmation, applies the fix or generates code, verifies the result, and proposes follow-up steps. This works across **all agents and all skills**.
+
+```bash
+agents ask "<your natural language request>" [--path <project>] [--yes]
+```
+
+**Examples:**
+
+```bash
+# Diagnose and fix a Docker build error (Portuguese)
+agents ask "docker compose up falhou: stat /app/cmd/server: directory not found" \
+  --path /path/to/my-go-service
+
+# Create a Go entity (Portuguese)
+agents ask "criar uma entidade Product com os campos name, price e active" \
+  --path /path/to/my-project
+
+# Add authentication (English)
+agents ask "add NextAuth authentication to my Next.js project" \
+  --path /path/to/nextjs-app
+
+# Generate test suite (English)
+agents ask "generate test suite for the payment module" \
+  --path /path/to/go-service
+
+# Skip all confirmation prompts (CI / automation)
+agents ask "minha aplicação não está iniciando" \
+  --path /path/to/project \
+  --yes
+```
+
+**What happens when you run `agents ask`:**
+
+```
+1. Project scanner reads the directory (detects Go/Next.js/Python, reads files)
+2. API classifies your intent → agent + skill + params
+3. CLI displays the Execution Plan:
+
+   ╭── Execution Plan ───────────────────────────────────────╮
+   │  Understood: Diagnose and fix Go errors in your project  │
+   │                                                          │
+   │    Agent  : diagnostic                                   │
+   │    Skill  : diagnostic.go_diagnose                       │
+   │    Action : Run build, capture errors and fix (go)       │
+   ╰──────────────────────────────────────────────────────────╯
+
+4. Asks: "Proceed? [y/N]"
+5. Runs the build locally to capture errors
+6. Sends errors + source files to the diagnostic agent
+7. Writes fixed files to disk
+8. Verifies the fix by re-running the build (up to 3 iterations)
+9. Suggests follow-up steps the user can approve one at a time
+```
+
+**Verification loop:** After applying a fix, the CLI re-runs the build (and `docker compose build` if a `docker-compose.yml` is present) to confirm the fix worked. If a new error appears, it iterates up to **3 times** before reporting what remains.
+
+**Language matching:** The response language (plan text, messages, prompts) automatically matches the language of your input — Portuguese if you write in PT, English if you write in EN.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path` / `-p` | current dir | Project directory to analyze and fix |
+| `--output` / `-o` | project path | Where to write generated/fixed files |
+| `--yes` / `-y` | false | Skip all confirmation prompts (auto-approve everything) |
+
+---
+
+### `agents generate`
+
+Scaffold a new production-ready project from a natural language description.
 
 ```bash
 agents generate "Go e-commerce API with Fiber, PostgreSQL, JWT auth, and clean architecture" \
@@ -273,86 +147,355 @@ agents generate "Go e-commerce API with Fiber, PostgreSQL, JWT auth, and clean a
   --scope backend
 ```
 
+**What it generates (Go backend example):**
+
+```
+store-api/
+├── cmd/main.go                          # Entry point with 5-step init sequence
+├── go.mod                               # Module with all dependencies pinned
+├── .env.example                         # Environment variable template
+├── Makefile                             # Build, test, migrate, swagger targets
+├── initializers/
+│   ├── database.go                      # GORM + PostgreSQL connection pool
+│   ├── services.go                      # Dependency injection container
+│   ├── migrations.go                    # AutoMigrate runner
+│   └── validators.go                    # CPF, SSN, CNPJ, NPI validators
+├── domain/entities/                     # GORM entities with UUID primary keys
+├── domain/dtos/                         # Input + response DTOs
+├── services/contracts/                  # Service interfaces
+├── controllers/                         # Fiber handlers with Swagger annotations
+├── internal/app/swagger.go              # Swagger UI at /swagger/* with basic auth
+├── docs/docs.go                         # Swagger stub (replaced by swag init)
+├── Dockerfile                           # Multi-stage builder → distroless
+└── docker-compose.yml                   # App + PostgreSQL
+```
+
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--name` / `-n` | required | Project name (becomes the directory) |
+| `--name` / `-n` | required | Project name (becomes the output directory) |
 | `--language` / `-l` | `go` | `go` or `python` |
-| `--framework` / `-f` | `fiber` | Go: `fiber` `gin` `gorilla` `echo` `chi` |
+| `--framework` / `-f` | `fiber` | Go: `fiber` `gin` `gorilla` `echo` `chi` · Python: `fastapi` |
 | `--scope` / `-s` | `backend` | `backend`, `frontend`, or `fullstack` |
-| `--output` / `-o` | current dir | Output directory |
+| `--output` / `-o` | current dir | Parent directory where the project folder is created |
 
-### Improve an existing project
+---
+
+### `agents improve`
+
+Add new features or apply improvements to a project that already exists on disk.
 
 ```bash
 agents improve "Add a credit card payment gateway and an API gateway for centralizing routes" \
   --path /path/to/existing-project
 ```
 
+The CLI scans the project structure locally (detecting Go, Next.js, Python, or Rust), identifies the relevant skills via BM25 routing, generates the new files, and writes them to disk — no manual copying required.
+
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--path` / `-p` | current dir | Path to the project to improve |
 | `--output` / `-o` | project path | Where to write the generated files |
 
-The CLI scans the project structure locally (detecting Go, Next.js, Python, or Rust projects), sends the file tree to the API, and writes the generated files back to disk — no manual file copying required.
+---
 
-### Other commands
+### `agents diagnose`
+
+Explicitly diagnose and fix build, compile, or runtime errors in a Go, Next.js, or Python project. Unlike `agents ask`, this command always runs in diagnostic mode without intent classification.
 
 ```bash
-agents list-skills             # list all 97 skills
-agents list-skills --agent go  # filter by agent (31 Go skills)
-agents version                 # CLI version + API status
+agents diagnose --path /path/to/broken-project
+agents diagnose --path /path/to/project --language go
+```
+
+**What it does:**
+
+1. Runs the appropriate build command locally to capture the full error output:
+   - Go: `go build ./...`
+   - Next.js: `npx tsc --noEmit`
+   - Python: `python -m py_compile`
+2. Scans the project files and filters the ones referenced in the error output.
+3. Sends everything to the diagnostic agent, which identifies the root cause.
+4. Writes the fixed files to disk.
+5. Prints any manual steps required (e.g., `go mod tidy`).
+
+**Supported error patterns (Go — pattern-based, no LLM required):**
+
+| Pattern | Fix applied |
+|---------|-------------|
+| `go.mod requires go >= X.Y` | Updates `FROM golang:X.Y-alpine` in Dockerfile |
+| `stat /app/<path>: directory not found` | Corrects the build path in Dockerfile to `./cmd` |
+| `missing go.sum entry` | Reports: run `go mod tidy && go mod download` |
+| `imported and not used` | Removes the unused import from the source file |
+| `undefined: <symbol>` | Reports the undefined symbol with context |
+| `cannot use … as type …` | Reports the type mismatch with line reference |
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path` / `-p` | current dir | Path to the project with errors |
+| `--language` / `-l` | auto-detected | `go`, `nextjs`, or `python` (inferred from `go.mod`, `package.json`, `*.py`) |
+| `--output` / `-o` | project path | Where to write fixed files |
+
+---
+
+### `agents list-skills`
+
+List all available skills with their category and description.
+
+```bash
+agents list-skills                    # all 100 skills
+agents list-skills --agent go         # 31 Go skills
+agents list-skills --agent diagnostic # 3 diagnostic skills
+agents list-skills --agent nextjs     # 25 Next.js skills
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--agent` / `-a` | all | Filter by agent name |
+
+---
+
+### `agents version`
+
+Show the CLI version and verify that the API is reachable.
+
+```bash
+agents version
+# Agents CLI v0.1.0
+# Platform: Linux x86_64
+# API: online — 100 skills registered
 ```
 
 ---
 
-## Requirements
+## End-to-End Flows
 
-- Python 3.12+
-- Hugging Face account — free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with **Inference** permission enabled
+### `agents ask` — Natural Language Interface
 
----
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              USER'S MACHINE                                     │
+│                                                                                 │
+│  $ agents ask "docker compose up falhou: stat /app/cmd/server: not found"      │
+│               --path /path/to/digital-bank-go                                   │
+│                                                                                 │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │  CLI  (app/cli/commands.py)                                              │  │
+│  │                                                                          │  │
+│  │  1. detect_user_language(query) → "pt"                                  │  │
+│  │  2. scan_project()  →  { files: [...], project_type: "go", ... }        │  │
+│  │  3. POST /workflow/ask  →  intent classification                         │  │
+│  │     Response: { agent: "diagnostic", skill: "go_diagnose", ... }        │  │
+│  │  4. Show Execution Plan panel, ask confirmation                          │  │
+│  │  5. go build ./...  →  captures error output                            │  │
+│  │     docker compose build  →  captures docker error (if compose present) │  │
+│  │  6. POST /workflow/diagnose  →  { error_output, source_files, ... }     │  │
+│  │  7. Write fixed Dockerfile to disk                                       │  │
+│  │  8. Re-run build + docker compose build to verify                       │  │
+│  │     ✓ Verification passed — project builds successfully!                │  │
+│  │  9. Show follow-up suggestions                                           │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
-## Setup
+### `agents improve` — Improving an Existing Project
 
-```bash
-# 1. Clone and enter the project
-git clone <repo-url>
-cd ai-agents-mcp-tools
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              USER'S MACHINE                                     │
+│                                                                                 │
+│  $ agents improve "Add a credit card payment gateway and an API gateway"        │
+│                    --path /path/to/my-project                                   │
+│                                                                                 │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │  CLI  (app/cli/commands.py)                                              │  │
+│  │                                                                          │  │
+│  │  1. Project Scanner (app/cli/project_scanner.py)                        │  │
+│  │     • Walks directory tree                                               │  │
+│  │     • Skips: .git  node_modules  __pycache__  vendor                    │  │
+│  │     • Reads files up to 10 KB each / 150 KB total                       │  │
+│  │     • Detects project type from go.mod / package.json / requirements    │  │
+│  │     → { files: [...], project_type: "go", file_count: 22 }              │  │
+│  │                                                                          │  │
+│  │  2. AgentsClient.improve()  (app/cli/client.py)                         │  │
+│  │     POST /workflow/improve  →  instruction + project_files + type       │  │
+│  └──────────────────────────────────────────────────────────────────────────┘  │
+│                                    │  HTTP                                      │
+└────────────────────────────────────┼───────────────────────────────────────────┘
+                                     │
+┌────────────────────────────────────▼───────────────────────────────────────────┐
+│                              AGENTS API  (FastAPI)                              │
+│                                                                                 │
+│  /workflow/improve  (app/main.py)                                               │
+│                                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────┐   │
+│  │  3. Orchestrator.plan()  — BM25 Skill Router                           │   │
+│  │     → [ go.service, go.repository, go.fiber_handler, … ]               │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                            │
+│  ┌─────────────────────────────────▼───────────────────────────────────────┐   │
+│  │  4. Dual LLM Param Extractor  (app/llm/dual_extractor.py)              │   │
+│  │     asyncio.gather(LLM_MODEL_1, LLM_MODEL_2) — parallel, best wins     │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                            │
+│  ┌─────────────────────────────────▼───────────────────────────────────────┐   │
+│  │  5. Agent.execute_skill(skill_name, **params)                           │   │
+│  │     Go skills  →  template-based generation (fast, deterministic)       │   │
+│  │     Next.js / Design / Frontend  →  LLM code generation via HuggingFace│   │
+│  │     Returns: [ CodeArtifact(filename, content, language), … ]          │   │
+│  └─────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                 │
+│  Response → { artifacts: [...], success: true, summary: "..." }                │
+└────────────────────────────────────┬───────────────────────────────────────────┘
+                                     │  HTTP response
+┌────────────────────────────────────▼───────────────────────────────────────────┐
+│                              USER'S MACHINE                                     │
+│                                                                                 │
+│  6. Platform Agent  (app/cli/platforms/linux.py | windows.py)                  │
+│     • Resolves absolute paths relative to project root                         │
+│     • Creates missing directories                                               │
+│     • Writes each file to disk                                                  │
+│                                                                                 │
+│  /path/to/my-project/                                                           │
+│  ├── internal/service/payment_gateway_service.go    ← NEW                      │
+│  ├── internal/repository/payment_gateway_repo.go    ← NEW                      │
+│  ├── internal/handler/payment_gateway_handler.go    ← NEW                      │
+│  ├── internal/service/payment_gateway_test.go       ← NEW                      │
+│  ├── Dockerfile                                     ← NEW                      │
+│  └── docker-compose.yml                             ← NEW                      │
+│                                                                                 │
+│  ✓ Changes written to /path/to/my-project                                      │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
 
-# 2. Create a virtual environment
-python -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
+### `agents generate` — Scaffolding a New Project from Scratch
 
-# 3. Install all dependencies
-make install
-# or: pip install -e ".[dev]"
+```
+$ agents generate "Go microservice for order management with Fiber, PostgreSQL, JWT"
+                  --name order-service --language go --framework fiber
 
-# 4. Configure environment
-cp .env.example .env
-# Edit .env — set HUGGINGFACE_TOKEN, LLM_MODEL_1, LLM_MODEL_2
+CLI → POST /workflow/scaffold
+         │
+         ▼
+  Architecture Pipeline
+  ┌─────────────────────────────────┐
+  │ BusinessObjectiveParserAgent    │  — extracts 7 requirement dimensions
+  │          ↓                      │
+  │ SolutionArchitectureDecision    │  — selects pattern (microservices / hexagonal / …)
+  │          ↓                      │
+  │ SolutionFlowDiagramAgent        │
+  │          ↓                      │
+  │ ValidationAgent                 │
+  │          ↓                      │
+  │ ArchitecturePatternSelector     │  — fitness scoring matrix, deterministic
+  └─────────────────────────────────┘
+         │
+         ▼
+  Skill Generation (parallel)
+  ┌──────────────────┬──────────────────────┐
+  │  GoAgent         │  NextJSAgent          │
+  │  BackendAgent    │  DesignAgent          │
+  │  (31 Go skills)  │  FrontendAgent        │
+  │                  │  VercelAgent          │
+  └──────────────────┴──────────────────────┘
+         │
+         ▼
+  Platform Agent writes every artifact to disk
+  → /path/to/output/order-service/  (32+ files)
 ```
 
 ---
 
-## Running
+## Agent Roster
 
-### Development
+| Agent | Skills | Focus |
+|-------|--------|-------|
+| `go` | 31 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
+| `backend` | 6 | Python/FastAPI — endpoints, SQLAlchemy, repository pattern, Docker |
+| `nextjs` | 25 | App Router, API routes, server actions, layouts, data fetching |
+| `design` | 17 | UI components, design systems, dark mode, accessibility |
+| `frontend` | 13 | State management, hooks, forms, animations, performance |
+| `vercel` | 5 | Deployment, environment config, edge functions |
+| `diagnostic` | 3 | Error diagnosis and fix — Go, Next.js, Python |
 
-```bash
-make dev      # hot-reload on port 3030
-make run      # without reload
-make stop     # kill the process
-make test     # full test suite
-make lint     # ruff linter
+**Total: 100 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
+
+---
+
+## Intelligence Architecture
+
+No model runs inside this application. All LLM inference is delegated to the **Hugging Face Inference API** over HTTP, making the service deployable on minimal infrastructure (0.5 CPU / 512 MB RAM):
+
+```
+This application                          Hugging Face Inference API
+┌───────────────────────────────┐         ┌──────────────────────────────────────┐
+│  FastAPI                      │         │  LLM_MODEL_1                         │
+│  AgentOrchestrator            │──HTTP──▶│  meta-llama/Llama-3.1-8B-Instruct   │
+│  Architecture Pipeline        │         │  (general purpose)                   │
+│  100 Skills                   │         ├──────────────────────────────────────┤
+│  BM25 Skill Router            │──HTTP──▶│  LLM_MODEL_2                         │
+│  Dual LLM Extractor           │◀────────│  Qwen/Qwen2.5-Coder-7B-Instruct     │
+│  Intent Router                │         │  (code specialized)                  │
+│  Diagnostic Agent             │         └──────────────────────────────────────┘
+└───────────────────────────────┘
+  RAM: ~150–200 MB  |  LLM RAM: 0 (remote)
 ```
 
-API: `http://localhost:3030`  
-Interactive docs: `http://localhost:3030/docs`
+### Skill Routing — BM25 (zero cost, zero API calls)
 
-### Production
+Skill selection uses an **in-memory BM25 index** built at startup from the `name + description + tags` of all 100 skills. No LLM call is needed to decide which skill to invoke.
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 3030
+```
+"build a Go microservice with JWT auth"
+  → BM25 search (local, microseconds)
+  → go.fiber_handler (0.94), go.fiber_middleware (0.91), go.service (0.87), …
+```
+
+### Dual LLM Parameter Extraction
+
+When the BM25 router selects a skill, both models are queried **in parallel** to extract the required parameters. The response with better coverage of required fields wins:
+
+```
+Instruction: "Add a payment gateway with credit card support"
+Skill selected: go.service  →  requires: resource, module_name
+
+asyncio.gather(
+  LLM_MODEL_1  →  {"resource": "payment_gateway", "module_name": "github.com/org/api"}   score: 2
+  LLM_MODEL_2  →  {"resource": "payment", "module_name": ""}                              score: 1
+)
+
+Winner: LLM_MODEL_1  →  params passed to skill execution
+```
+
+If both models fail (network error, invalid JSON, missing fields), the fallback extractor infers params from `go.mod` and the instruction text — ensuring the pipeline always produces output.
+
+### Intent Classification — `agents ask`
+
+When `agents ask` is used, the query goes through an additional intent classification layer before skill routing:
+
+```
+User query: "minha aplicação não está iniciando"
+     │
+     ▼
+detect_user_language()  →  "pt"   (response will be in Portuguese)
+     │
+     ▼
+_is_diagnostic()  →  true   (contains "não está iniciando")
+     │
+     ▼
+_detect_lang_from_context()  →  "go"   (project has go.mod)
+     │
+     ▼
+Route to: diagnostic / diagnostic.go_diagnose
+     │
+     ▼
+CLI runs: go build ./...  →  captures error
+CLI runs: docker compose build  →  (if docker-compose.yml present)
+     │
+     ▼
+POST /workflow/diagnose  →  fix applied
+     │
+     ▼
+Re-verify: go build ./... + docker compose build (up to 3 iterations)
 ```
 
 ---
@@ -369,9 +512,10 @@ GET /health    — agent count, skill count, LLM status, MCP server list
 ### Agents & Skills
 
 ```
-GET /agents                   — list all agents and their skill counts
-GET /skills                   — list all 97 skills
-GET /skills?agent=go          — skills for a specific agent
+GET /agents                    — list all agents and their skill counts
+GET /skills                    — list all 100 skills
+GET /skills?agent=go           — skills for a specific agent
+GET /skills?agent=diagnostic   — the 3 diagnostic skills
 GET /skills?category=backend
 GET /skills?tag=fiber
 ```
@@ -387,6 +531,68 @@ POST /skills/execute
     "resource": "order",
     "module_name": "github.com/org/order-service"
   }
+}
+```
+
+### Natural Language Intent Routing
+
+Route a natural-language query to the best matching agent and skill. Returns the plan without executing anything — the CLI uses this to show the plan before asking for confirmation.
+
+```http
+POST /workflow/ask
+{
+  "query": "criar uma entidade Product com os campos name, price e active",
+  "project_context": {
+    "project_type": "go",
+    "file_count": 12,
+    "files": [
+      { "path": "go.mod", "content": "module github.com/org/store\n..." }
+    ]
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "intent": "generate",
+  "is_diagnostic": false,
+  "agent": "go",
+  "skill": "go.gorm_entity",
+  "params": { "resource": "product", "module_name": "github.com/org/store" },
+  "description": "Criar entidade GORM Product com UUID e DTOs",
+  "user_language": "pt",
+  "suggestions": [...],
+  "confidence": 0.75
+}
+```
+
+### Diagnose and Fix Errors
+
+```http
+POST /workflow/diagnose
+{
+  "language": "go",
+  "error_output": "stat /app/cmd/server: directory not found",
+  "source_files": [
+    { "path": "Dockerfile", "content": "FROM golang:1.26-alpine AS builder\n..." },
+    { "path": "go.mod", "content": "module github.com/org/service\n..." }
+  ],
+  "module_name": "github.com/org/service"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "summary": "Fixed Dockerfile build path: ./cmd/server → ./cmd",
+  "artifacts": [
+    { "filename": "Dockerfile", "content": "...", "language": "dockerfile" }
+  ],
+  "instructions": []
 }
 ```
 
@@ -456,107 +662,6 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
 
 ---
 
-## Architecture Pipeline (detailed)
-
-```
-[Natural Language Objective]
-        ↓
-[BusinessObjectiveParserAgent]
-  — Extracts 7 requirement dimensions (scalability, compliance, availability, …)
-  — Multi-turn clarification support
-        ↓
-[SolutionArchitectureDecisionEngine]
-  — Rule-based pattern selection (microservices, hexagonal, monolith, …)
-  — Bypassed when architecture_pattern is forced in the request
-        ↓
-[SolutionFlowDiagramAgent] → [ValidationAgent]
-        ↓
-[ArchitecturePatternSelector]           ← NEW (Issue #14)
-  — Fitness scoring matrix: 5 dimensions × 3 design partners
-  — Deterministic weighted score per partner (no LLM call)
-  — Hybrid activation: Microservices + Hexagonal when both score ≥ 0.65
-    and score gap ≤ 0.15
-  — Produces DesignPartnerPlan with per-partner scores + rejection reasons
-        ↓
-[DesignPartnerOrchestrator]
-  — Routes to: Hexagonal | Microservices | Monolith design partner
-  — Hybrid mode: activates both Microservices + Hexagonal in sequence
-        ↓
-[WorkflowCoordinator]
-  — Routes to GoAgent or BackendAgent based on backend_language
-  — Generates frontend artifacts via NextJSAgent + DesignAgent
-  — Writes every file to disk at output_dir/project_name/
-```
-
-### Requirement Dimensions
-
-| Dimension | Examples |
-|-----------|---------|
-| `scalability` | expected users, peak load, growth rate |
-| `availability` | target uptime (SLA), RTO, RPO |
-| `compliance` | GDPR, HIPAA, SOC2, PCI-DSS, ISO 27001 |
-| `domain_boundaries` | e-commerce, fintech, healthcare, SaaS, IoT |
-| `integration` | Stripe, Kafka, REST/gRPC/WebSocket patterns |
-| `budget` | startup / mid-market / enterprise tier |
-| `team_size` | engineering headcount, organisational maturity |
-
----
-
-### Architecture Pattern Selector (Issue #14)
-
-`ArchitecturePatternSelector` runs a **deterministic weighted fitness scoring matrix** across 5 signal dimensions and 3 design partners, producing a `DesignPartnerPlan` with full per-partner scores and rejection reasons. No LLM call is required.
-
-#### Scoring Matrix
-
-| Dimension | Weight | Microservices | Hexagonal | Monolith |
-|---|---|---|---|---|
-| `scalability_demand` | 30 % | 0.95 | 0.48 | 0.18 |
-| `domain_complexity` | 25 % | 0.62 | 0.95 | 0.28 |
-| `large_team` | 20 % | 0.88 | 0.60 | 0.12 |
-| `operational_maturity` | 15 % | 0.90 | 0.65 | 0.22 |
-| `time_to_market_pressure` | 10 % | 0.12 | 0.38 | 0.92 |
-
-Each partner's raw score is normalised against its theoretical maximum so comparisons are meaningful across partners with different aptitude ceilings.
-
-#### Hybrid Activation
-
-When both **Microservices** and **Hexagonal** score ≥ 0.65 normalised *and* their gap is ≤ 0.15, both partners are activated in sequence (`activation_order` 1 and 2). This is the only supported hybrid pair.
-
-#### DesignPartnerPlan schema
-
-```json
-{
-  "plan_id": "uuid",
-  "decision_id": "uuid",
-  "is_hybrid": false,
-  "scoring_deterministic": true,
-  "selected_partners": [
-    {
-      "partner_name": "microservices_design_partner",
-      "activation_order": 1,
-      "rationale": "...",
-      "configuration": { "parameters": {} }
-    }
-  ],
-  "rationale": {
-    "summary": "...",
-    "primary_signals": ["scalability_demand", "large_team"],
-    "hybrid_reason": null,
-    "per_partner_scores": [
-      {
-        "partner_name": "microservices_design_partner",
-        "fitness_score": 0.847,
-        "selected": true,
-        "rejection_reason": null,
-        "dimension_scores": [...]
-      }
-    ]
-  }
-}
-```
-
----
-
 ## GoAgent — 31 Skills
 
 ### Shared Skills (framework-agnostic)
@@ -573,16 +678,16 @@ When both **Microservices** and **Hexagonal** score ≥ 0.65 normalised *and* th
 | `go.config` | Config struct + viper loader for env/YAML |
 | `go.logger` | Structured logging setup with uber-go/zap + request-scoped middleware |
 
-### Medical-App-Core Pattern Skills (NEW)
+### Medical-App-Core Pattern Skills
 
-Four additive skills that model the production patterns from the Medical-App-Core reference project — **Fiber v2 + GORM + PostgreSQL + Swagger + godotenv** — so the platform can generate complete, production-ready Go services without any dependency on the HuggingFace API.
+Four additive skills that model the production patterns from the Medical-App-Core reference project — **Fiber v2 + GORM + PostgreSQL + Swagger + godotenv** — generating complete, production-ready Go services without any dependency on the HuggingFace API.
 
-| Skill | Shortcut | Generates |
-|---|---|---|
-| `go.fiber_full_project` | `full_project` | Complete project scaffold: `go.mod` (Fiber v2 + GORM + JWT v4 + Swagger + godotenv + uuid), `cmd/main.go` with 5-step init sequence (godotenv → InitialDB → RunMigrations → InitServices → Fiber → Swagger → routes → Listen), `.env.example`, `Makefile` |
-| `go.initializers` | `initializers` | Centralised `initializers/` package: `database.go` (GORM + PostgreSQL connection pool, MaxOpenConns=50), `services.go` (Services DI container + `InitServices(db)`), `migrations.go` (uuid-ossp extension + `AutoMigrate`), `validators.go` (CPF, SSN, CNPJ, NPI) |
-| `go.gorm_entity` | `entity` | `domain/entities/{resource}.go` (GORM entity, UUID primary key via `uuid_generate_v4()`, gorm.Model embedding), `services/contracts/{resource}ContractService.go` (service interface), `domain/dtos/{resource}DTO.go` (InputDTO + DTO) |
-| `go.swagger_fiber` | `swagger` | `internal/app/swagger.go` (Swagger UI at `/swagger/*` with HTTP basic auth from env vars), `controllers/{resource}Controller.go` (annotated with swaggo `@Summary`, `@Param`, `@Success`, `@Security BearerAuth`), `docs/docs.go` stub (replaced by `swag init`) |
+| Skill | Generates |
+|---|---|
+| `go.fiber_full_project` | Complete project scaffold: `go.mod` (Fiber v2 + GORM + JWT v4 + Swagger + godotenv + uuid), `cmd/main.go` with 5-step init sequence (godotenv → InitialDB → RunMigrations → InitServices → Fiber → Swagger → routes → Listen), `.env.example`, `Makefile` |
+| `go.initializers` | Centralised `initializers/` package: `database.go` (GORM + PostgreSQL connection pool, MaxOpenConns=50), `services.go` (Services DI container + `InitServices(db)`), `migrations.go` (uuid-ossp extension + `AutoMigrate`), `validators.go` (CPF, SSN, CNPJ, NPI) |
+| `go.gorm_entity` | `domain/entities/{resource}.go` (GORM entity, UUID primary key via `uuid_generate_v4()`, gorm.Model embedding), `services/contracts/{resource}ContractService.go` (service interface), `domain/dtos/{resource}DTO.go` (InputDTO + DTO) |
+| `go.swagger_fiber` | `internal/app/swagger.go` (Swagger UI at `/swagger/*` with HTTP basic auth from env vars), `controllers/{resource}Controller.go` (annotated with swaggo `@Summary`, `@Param`, `@Success`, `@Security BearerAuth`), `docs/docs.go` stub (replaced by `swag init`) |
 
 **Example — scaffold a full service in one command:**
 
@@ -634,6 +739,196 @@ POST /skills/execute
 
 ---
 
+## DiagnosticAgent — 3 Skills
+
+Pattern-based and LLM-assisted error diagnosis for Go, Next.js, and Python projects. Diagnostic skills are triggered automatically by `agents ask` when an error is described, or explicitly via `agents diagnose`.
+
+| Skill | Fixes |
+|---|---|
+| `diagnostic.go_diagnose` | Go version mismatch in Dockerfile, wrong build path, missing `go.sum`, unused imports, undefined symbols, type mismatches |
+| `diagnostic.nextjs_diagnose` | TypeScript type errors, missing dependencies, module resolution failures, Next.js config issues |
+| `diagnostic.python_diagnose` | Import errors, syntax errors, missing packages, incompatible dependency versions |
+
+**How it works:**
+
+```
+Error output received
+        │
+        ▼
+Pattern matching (no LLM, deterministic)
+  • go_version_mismatch    → fix Dockerfile FROM line
+  • dockerfile_build_path  → fix RUN go build path to ./cmd
+  • missing_go_sum         → instruct: go mod tidy && go mod download
+  • missing_module         → instruct: go get <module>
+  • unused_import          → remove the import from source file
+  • undefined_symbol       → report with context
+        │
+        ▼ (if no pattern matches)
+LLM-based analysis
+  → LLM proposes JSON patch: {"fixes": [{"file": "...", "patch": "..."}]}
+        │
+        ▼ (if LLM unavailable or fails)
+Generic diagnostic report written to diagnostic_report.md
+```
+
+---
+
+## Architecture Pipeline (detailed)
+
+```
+[Natural Language Objective]
+        ↓
+[BusinessObjectiveParserAgent]
+  — Extracts 7 requirement dimensions (scalability, compliance, availability, …)
+  — Multi-turn clarification support
+        ↓
+[SolutionArchitectureDecisionEngine]
+  — Rule-based pattern selection (microservices, hexagonal, monolith, …)
+  — Bypassed when architecture_pattern is forced in the request
+        ↓
+[SolutionFlowDiagramAgent] → [ValidationAgent]
+        ↓
+[ArchitecturePatternSelector]
+  — Fitness scoring matrix: 5 dimensions × 3 design partners
+  — Deterministic weighted score per partner (no LLM call)
+  — Hybrid activation: Microservices + Hexagonal when both score ≥ 0.65
+    and score gap ≤ 0.15
+  — Produces DesignPartnerPlan with per-partner scores + rejection reasons
+        ↓
+[DesignPartnerOrchestrator]
+  — Routes to: Hexagonal | Microservices | Monolith design partner
+  — Hybrid mode: activates both Microservices + Hexagonal in sequence
+        ↓
+[WorkflowCoordinator]
+  — Routes to GoAgent or BackendAgent based on backend_language
+  — Generates frontend artifacts via NextJSAgent + DesignAgent
+  — Writes every file to disk at output_dir/project_name/
+```
+
+### Requirement Dimensions
+
+| Dimension | Examples |
+|-----------|---------|
+| `scalability` | expected users, peak load, growth rate |
+| `availability` | target uptime (SLA), RTO, RPO |
+| `compliance` | GDPR, HIPAA, SOC2, PCI-DSS, ISO 27001 |
+| `domain_boundaries` | e-commerce, fintech, healthcare, SaaS, IoT |
+| `integration` | Stripe, Kafka, REST/gRPC/WebSocket patterns |
+| `budget` | startup / mid-market / enterprise tier |
+| `team_size` | engineering headcount, organisational maturity |
+
+### Architecture Pattern Selector
+
+`ArchitecturePatternSelector` runs a **deterministic weighted fitness scoring matrix** across 5 signal dimensions and 3 design partners, producing a `DesignPartnerPlan` with full per-partner scores and rejection reasons. No LLM call is required.
+
+#### Scoring Matrix
+
+| Dimension | Weight | Microservices | Hexagonal | Monolith |
+|---|---|---|---|---|
+| `scalability_demand` | 30 % | 0.95 | 0.48 | 0.18 |
+| `domain_complexity` | 25 % | 0.62 | 0.95 | 0.28 |
+| `large_team` | 20 % | 0.88 | 0.60 | 0.12 |
+| `operational_maturity` | 15 % | 0.90 | 0.65 | 0.22 |
+| `time_to_market_pressure` | 10 % | 0.12 | 0.38 | 0.92 |
+
+#### Hybrid Activation
+
+When both **Microservices** and **Hexagonal** score ≥ 0.65 normalised *and* their gap is ≤ 0.15, both partners are activated in sequence (`activation_order` 1 and 2). This is the only supported hybrid pair.
+
+#### DesignPartnerPlan schema
+
+```json
+{
+  "plan_id": "uuid",
+  "decision_id": "uuid",
+  "is_hybrid": false,
+  "scoring_deterministic": true,
+  "selected_partners": [
+    {
+      "partner_name": "microservices_design_partner",
+      "activation_order": 1,
+      "rationale": "...",
+      "configuration": { "parameters": {} }
+    }
+  ],
+  "rationale": {
+    "summary": "...",
+    "primary_signals": ["scalability_demand", "large_team"],
+    "hybrid_reason": null,
+    "per_partner_scores": [
+      {
+        "partner_name": "microservices_design_partner",
+        "fitness_score": 0.847,
+        "selected": true,
+        "rejection_reason": null,
+        "dimension_scores": [...]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Requirements
+
+- Python 3.12+
+- Hugging Face account — free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with **Inference** permission enabled
+
+---
+
+## Setup
+
+```bash
+# 1. Clone and enter the project
+git clone <repo-url>
+cd ai-agents-mcp-tools
+
+# 2. Create a virtual environment
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+
+# 3. Install all dependencies
+make install
+# or: pip install -e ".[dev]"
+
+# 4. Configure environment
+cp .env.example .env
+# Edit .env — set HUGGINGFACE_TOKEN, LLM_MODEL_1, LLM_MODEL_2
+```
+
+---
+
+## Running
+
+### Development
+
+```bash
+make dev      # hot-reload on port 3030
+make run      # without reload
+make stop     # kill the process
+make test     # full test suite
+make lint     # ruff linter
+```
+
+API: `http://localhost:3030`  
+Interactive docs: `http://localhost:3030/docs`
+
+### Production
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 3030
+```
+
+### CLI against a local API
+
+```bash
+AGENTS_API_URL=http://localhost:3030 agents ask "minha aplicação Go não está compilando" \
+  --path /path/to/project
+```
+
+---
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -670,18 +965,19 @@ app/
 ├── agents/
 │   ├── base.py                  # BaseAgent, AgentResult, AgentContext
 │   ├── orchestrator.py          # AgentOrchestrator — BM25 routing + coordination
-│   ├── go_agent.py              # GoAgent — 27 skills across 5 HTTP frameworks
+│   ├── go_agent.py              # GoAgent — 31 skills across 5 HTTP frameworks
 │   ├── backend_agent.py         # Python/FastAPI specialist
 │   ├── nextjs_agent.py          # Next.js App Router specialist
 │   ├── design_agent.py          # UI/UX and design systems specialist
 │   ├── frontend_agent.py        # React frontend patterns specialist
-│   └── vercel_agent.py          # Vercel deployment specialist
+│   ├── vercel_agent.py          # Vercel deployment specialist
+│   └── diagnostic_agent.py      # DiagnosticAgent — Go, Next.js, Python error fixing
 ├── skills/
 │   ├── base.py                  # BaseSkill, SkillResult, CodeArtifact, SkillCategory
 │   ├── registry.py              # SkillRegistry — @SkillRegistry.register decorator
 │   ├── go/
 │   │   ├── shared/
-│   │   │   ├── setup_project.py     # go.setup_project + go.fiber_full_project (NEW)
+│   │   │   ├── setup_project.py     # go.setup_project + go.fiber_full_project
 │   │   │   ├── go_struct.py
 │   │   │   ├── repository.py
 │   │   │   ├── service.py
@@ -690,22 +986,27 @@ app/
 │   │   │   ├── migration.py
 │   │   │   ├── config.py
 │   │   │   ├── logger.py
-│   │   │   ├── initializers.py      # NEW — go.initializers (centralised DI package)
-│   │   │   ├── gorm_entity.py       # NEW — go.gorm_entity (GORM entity + contract + DTOs)
-│   │   │   └── swagger.py           # NEW — go.swagger_fiber (Swagger UI + basicauth)
+│   │   │   ├── initializers.py      # go.initializers (centralised DI package)
+│   │   │   ├── gorm_entity.py       # go.gorm_entity (GORM entity + contract + DTOs)
+│   │   │   └── swagger.py           # go.swagger_fiber (Swagger UI + basicauth)
 │   │   └── http/                # fiber, gin, gorilla, echo, chi
 │   ├── backend/                 # fastapi_endpoint, sqlalchemy_model, …
 │   ├── nextjs/                  # components, routing, data_fetching, auth, …
 │   ├── design/                  # tailwind, shadcn, color_system, typography, …
 │   ├── frontend/                # state_management, forms, i18n, performance, …
-│   └── vercel/                  # deployment, environment, edge_config, analytics
+│   ├── vercel/                  # deployment, environment, edge_config, analytics
+│   └── diagnostic/
+│       ├── __init__.py
+│       ├── go_diagnose.py       # diagnostic.go_diagnose — pattern-based + LLM fallback
+│       ├── nextjs_diagnose.py   # diagnostic.nextjs_diagnose
+│       └── python_diagnose.py   # diagnostic.python_diagnose
 ├── architecture/
 │   ├── agents/
 │   │   ├── business_objective_parser.py
 │   │   ├── decision_engine.py
 │   │   ├── solution_flow_diagram.py
 │   │   ├── validation_agent.py
-│   │   ├── architecture_pattern_selector.py  # NEW — fitness scoring matrix + hybrid activation
+│   │   ├── architecture_pattern_selector.py  # fitness scoring matrix + hybrid activation
 │   │   └── system/              # hexagonal, microservices, monolith design partners
 │   ├── context/
 │   │   └── pipeline_context.py  # PipelineContext — shared state across pipeline
@@ -714,11 +1015,12 @@ app/
 │   │   ├── solution.py          # SolutionArchitectureDecision
 │   │   ├── system_design.py
 │   │   ├── workflow.py
-│   │   └── design_partner_plan.py  # NEW — DesignPartnerPlan, PartnerScore, PartnerActivation
+│   │   └── design_partner_plan.py  # DesignPartnerPlan, PartnerScore, PartnerActivation
 │   └── workflow_coordinator.py  # End-to-end pipeline + code generation router
 ├── cli/
-│   ├── commands.py              # Typer CLI — generate, improve, list-skills, version
+│   ├── commands.py              # Typer CLI — ask, generate, improve, diagnose, list-skills, version
 │   ├── client.py                # AgentsClient — HTTP client for the API
+│   ├── intent_router.py         # Natural language → agent/skill routing + language detection
 │   ├── project_scanner.py       # Scans existing projects, detects type, reads files
 │   └── platforms/
 │       ├── linux.py             # LinuxPlatformAgent — file writing, path resolution
