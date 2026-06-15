@@ -142,6 +142,19 @@ class ImproveRequest(BaseModel):
     project_type: str = "unknown"
 
 
+class DiagnoseRequest(BaseModel):
+    language: str
+    error_output: str
+    source_files: list[dict[str, str]] = []
+    module_name: str = ""
+    version: str = ""
+
+
+class AskRequest(BaseModel):
+    query: str
+    project_context: dict[str, Any] = {}
+
+
 # ── CLI Installer Downloads ───────────────────────────────────────────────────
 
 @app.get("/cli/download/linux", tags=["CLI"])
@@ -837,6 +850,110 @@ async def workflow_improve(request: ImproveRequest):
         ],
         "errors": errors,
         "summary": "\n".join(summaries),
+    }
+
+
+@app.post("/workflow/ask", tags=["Workflow"])
+async def workflow_ask(request: AskRequest):
+    """
+    Classify a natural-language query into a concrete skill call.
+
+    Returns the identified intent, agent, skill, params, a human-readable description
+    of what will happen, and a list of follow-up suggestions — WITHOUT executing anything.
+    The CLI uses this to show a plan and ask for user confirmation before acting.
+    """
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+
+    from app.cli.intent_router import route_intent
+
+    llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
+
+    try:
+        result = await route_intent(
+            query=request.query,
+            project_context=request.project_context,
+            orchestrator=_orchestrator,
+            llm=llm,
+        )
+    except Exception as e:
+        logger.exception("Intent routing failed")
+        raise HTTPException(500, f"Intent routing failed: {e}")
+
+    return result
+
+
+@app.post("/workflow/diagnose", tags=["Workflow"])
+async def workflow_diagnose(request: DiagnoseRequest):
+    """
+    Diagnose and fix build/compile/runtime errors in Go, Next.js, or Python projects.
+
+    Send the full error output and the content of affected source files.
+    Returns fixed files as artifacts, ready to write to disk.
+
+    Supported languages: go, nextjs, python
+    """
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+
+    lang = request.language.lower().strip()
+    skill_map = {
+        "go":     ("diagnostic", "diagnostic.go_diagnose"),
+        "nextjs": ("diagnostic", "diagnostic.nextjs_diagnose"),
+        "next":   ("diagnostic", "diagnostic.nextjs_diagnose"),
+        "python": ("diagnostic", "diagnostic.python_diagnose"),
+        "py":     ("diagnostic", "diagnostic.python_diagnose"),
+    }
+
+    if lang not in skill_map:
+        raise HTTPException(
+            400,
+            f"Unsupported language '{request.language}'. Supported: go, nextjs, python",
+        )
+
+    agent_name, skill_name = skill_map[lang]
+    import json as _json
+
+    params: dict[str, Any] = {
+        "error_output": request.error_output,
+        "source_files": _json.dumps([
+            {"path": f["path"], "content": f.get("content", "")}
+            for f in request.source_files
+        ]),
+    }
+    if lang == "go" and request.module_name:
+        params["module_name"] = request.module_name
+    if lang in ("nextjs", "next") and request.version:
+        params["next_version"] = request.version
+    if lang in ("python", "py") and request.version:
+        params["python_version"] = request.version
+
+    try:
+        result = await _orchestrator.run_skill(agent_name, skill_name, **params)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Diagnostic failed: {e}")
+
+    if not result.skill_results:
+        raise HTTPException(500, "No result returned from diagnostic skill")
+
+    skill_result = result.skill_results[0]
+    return {
+        "success": skill_result.success,
+        "language": request.language,
+        "summary": skill_result.summary,
+        "artifacts": [
+            {
+                "filename": a.filename,
+                "content": a.content,
+                "language": a.language,
+                "description": a.description,
+            }
+            for a in skill_result.artifacts
+        ],
+        "instructions": skill_result.instructions,
+        "error": skill_result.error,
     }
 
 

@@ -9,6 +9,7 @@ from .frontend_agent import FrontendAgent
 from .vercel_agent import VercelAgent
 from .backend_agent import BackendAgent
 from .go_agent import GoAgent
+from .diagnostic_agent import DiagnosticAgent
 
 if TYPE_CHECKING:
     from app.llm.base import BaseLLMProvider
@@ -35,6 +36,7 @@ class AgentOrchestrator:
             "vercel": VercelAgent(llm=llm),
             "backend": BackendAgent(llm=llm),
             "go": GoAgent(llm=go_llm or llm),
+            "diagnostic": DiagnosticAgent(llm=llm),
         }
         self._bm25 = SkillBM25Index()
         self._bm25.build(
