@@ -10,6 +10,7 @@ from .backend import fastapi_endpoint, sqlalchemy_model, repository_pattern, des
 from .go import setup_project, go_struct, repository, service, docker_setup as go_docker_setup, test_suite, migration, config, logger, fiber, gin, gorilla, echo, chi
 from .diagnostic import go_diagnose, nextjs_diagnose, python_diagnose
 from .solid import srp_skill, ocp_skill, lsp_skill, isp_skill, dip_skill
+from .design_patterns import creational_skill, structural_skill, behavioral_skill, enterprise_skill
 
 __all__ = [
     "BaseSkill",

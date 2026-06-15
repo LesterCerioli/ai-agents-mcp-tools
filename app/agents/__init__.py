@@ -5,6 +5,7 @@ from .frontend_agent import FrontendAgent
 from .vercel_agent import VercelAgent
 from .diagnostic_agent import DiagnosticAgent
 from .solid_agent import SOLIDPrinciplesEnforcerAgent
+from .design_pattern_agent import DesignPatternRecommenderAgent
 from .orchestrator import AgentOrchestrator
 
 __all__ = [
@@ -12,5 +13,6 @@ __all__ = [
     "NextJSAgent", "DesignAgent", "FrontendAgent", "VercelAgent",
     "DiagnosticAgent",
     "SOLIDPrinciplesEnforcerAgent",
+    "DesignPatternRecommenderAgent",
     "AgentOrchestrator",
 ]

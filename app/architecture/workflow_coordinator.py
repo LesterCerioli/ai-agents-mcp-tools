@@ -100,6 +100,7 @@ class WorkflowCoordinator:
 
         if ctx.system_design is not None or ctx.decision is not None:
             await self._run_solid_analysis(ctx)
+            await self._run_pattern_recommendation(ctx)
 
         system_design = ctx.system_design
         pattern_name = (
@@ -167,6 +168,19 @@ class WorkflowCoordinator:
         try:
             report = await solid_agent.analyze(ctx)
             ctx.metadata["solid_compliance_report"] = report
+        except Exception:
+            pass
+
+    async def _run_pattern_recommendation(self, ctx: PipelineContext) -> None:
+        """Auto-trigger design pattern recommendation after SOLID analysis."""
+        from app.agents.design_pattern_agent import DesignPatternRecommenderAgent
+        dp_agent = self._orchestrator.agents.get("design_patterns")
+        if not isinstance(dp_agent, DesignPatternRecommenderAgent):
+            return
+        try:
+            solid_report = ctx.metadata.get("solid_compliance_report")
+            report = await dp_agent.recommend(ctx, solid_report=solid_report)
+            ctx.metadata["pattern_recommendation_report"] = report
         except Exception:
             pass
 
@@ -311,9 +325,7 @@ class WorkflowCoordinator:
         return artifacts
 
     async def _backend_from_go(self, agent, resources: list[str], framework: str = "fiber") -> list[CodeArtifact]:
-        # Go file generation is handled entirely by the Medical-App-Core skill set
-        # called from the scaffold endpoint's skill_calls block. Return empty here
-        # to avoid duplicating or overwriting those artifacts.
+        
         return []
 
     async def _backend_from_microservices(
