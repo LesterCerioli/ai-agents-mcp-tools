@@ -86,3 +86,38 @@ class AgentsClient:
             )
             r.raise_for_status()
             return r.json()
+
+    def route_intent(
+        self,
+        query: str,
+        project_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/ask",
+                json={"query": query, "project_context": project_context or {}},
+            )
+            r.raise_for_status()
+            return r.json()
+
+    def diagnose(
+        self,
+        language: str,
+        error_output: str,
+        source_files: list[dict[str, str]],
+        module_name: str = "",
+        version: str = "",
+    ) -> dict[str, Any]:
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/diagnose",
+                json={
+                    "language": language,
+                    "error_output": error_output,
+                    "source_files": source_files,
+                    "module_name": module_name,
+                    "version": version,
+                },
+            )
+            r.raise_for_status()
+            return r.json()
