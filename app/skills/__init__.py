@@ -11,6 +11,13 @@ from .go import setup_project, go_struct, repository, service, docker_setup as g
 from .diagnostic import go_diagnose, nextjs_diagnose, python_diagnose
 from .solid import srp_skill, ocp_skill, lsp_skill, isp_skill, dip_skill
 from .design_patterns import creational_skill, structural_skill, behavioral_skill, enterprise_skill
+from .quality_assessment import (
+    maintainability_skill,
+    extensibility_skill,
+    testability_skill,
+    scalability_skill,
+    security_skill,
+)
 
 __all__ = [
     "BaseSkill",

@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     go_label = go_model if go_model else "fallback to LLM_MODEL_1"
     print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
     print(f"✓ Go agent LLM: {go_label if token else 'disabled (no token)'}")
-    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns")
+    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns, /mcp/quality-assessment")
     yield
 
 
@@ -210,7 +210,7 @@ async def health():
         "status": "healthy",
         "skills_registered": len(SkillRegistry.names()),
         "llm_enabled": _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
-        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate", "/mcp/solid", "/mcp/design-patterns"],
+        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate", "/mcp/solid", "/mcp/design-patterns", "/mcp/quality-assessment"],
     }
 
 
@@ -993,9 +993,93 @@ async def workflow_status(session_id: str):
 # Mounted lazily after lifespan initializes agents and coordinator.
 # We use app.router.add_event_handler to defer mounting until startup completes.
 
+class QualityAssessRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/architecture/quality-assessment", tags=["Solution Architecture"])
+async def architecture_quality_assessment(request: QualityAssessRequest):
+    """
+    Trigger a holistic architecture quality assessment for an existing session.
+
+    Combines SOLID compliance findings, design pattern recommendations, and the
+    system architecture design to score five quality attributes (0–100 each):
+    Maintainability, Extensibility, Testability, Scalability, and Security Boundary Clarity.
+
+    For best results, call /architecture/solid and /architecture/design-patterns first.
+
+    Returns the ArchitectureQualityReport with per-layer breakdown, top-5 improvement
+    actions, overall health score, and health grade.
+    """
+    from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
+
+    if request.session_id not in _architecture_sessions:
+        raise HTTPException(404, f"Session '{request.session_id}' not found.")
+
+    ctx = _architecture_sessions[request.session_id]
+    if ctx.decision is None and ctx.system_design is None:
+        raise HTTPException(
+            400,
+            "No architecture design found. Call /architecture/run or /architecture/parse first.",
+        )
+
+    qa_agent = _orchestrator.agents.get("quality_assessment") if _orchestrator else None
+    if not isinstance(qa_agent, ArchitectureQualityAssessmentAgent):
+        raise HTTPException(503, "Quality assessment agent not initialized.")
+
+    solid_report = ctx.metadata.get("solid_compliance_report")
+    pattern_report = ctx.metadata.get("pattern_recommendation_report")
+
+    try:
+        report = await qa_agent.assess(ctx, solid_report=solid_report, pattern_report=pattern_report)
+    except Exception as exc:
+        logger.exception("Quality assessment failed")
+        raise HTTPException(500, f"Quality assessment failed: {exc}") from exc
+
+    ctx.metadata["quality_assessment_report"] = report
+
+    return {
+        "session_id": request.session_id,
+        "report_id": report.report_id,
+        "architecture_pattern": report.architecture_pattern,
+        "overall_health_score": report.overall_health_score,
+        "health_grade": report.health_grade,
+        "analysis_summary": report.analysis_summary,
+        "attribute_scores": [
+            {
+                "attribute": s.attribute.value,
+                "score": s.score,
+                "justification": s.justification,
+            }
+            for s in report.attribute_scores
+        ],
+        "layer_quality_breakdown": [
+            {
+                "layer": lq.layer,
+                "score": lq.score,
+                "issues": lq.issues,
+                "strengths": lq.strengths,
+            }
+            for lq in report.layer_quality_breakdown
+        ],
+        "improvement_actions": [
+            {
+                "rank": a.rank,
+                "title": a.title,
+                "description": a.description,
+                "affected_attribute": a.affected_attribute.value,
+                "effort": a.effort.value,
+                "impact": a.impact.value,
+                "priority_score": a.priority_score,
+            }
+            for a in report.improvement_actions
+        ],
+    }
+
+
 @app.on_event("startup")
 async def mount_mcp_servers():
-    """Mount the three MCP SSE servers once agents are ready."""
+    """Mount the MCP SSE servers once agents are ready."""
     if _orchestrator is None or _workflow_coordinator is None:
         return
 
@@ -1005,8 +1089,10 @@ async def mount_mcp_servers():
     from app.mcp.orchestrator_mcp import OrchestratorMCPServer
     from app.mcp.solid_mcp import SOLIDMCPServer
     from app.mcp.design_pattern_mcp import DesignPatternMCPServer
+    from app.mcp.quality_assessment_mcp import QualityAssessmentMCPServer
     from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
     from app.agents.design_pattern_agent import DesignPatternRecommenderAgent
+    from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
 
     llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
 
@@ -1022,12 +1108,16 @@ async def mount_mcp_servers():
     dp_agent = _orchestrator.agents["design_patterns"]
     dp_server = DesignPatternMCPServer(_architecture_sessions, dp_agent, llm=llm)
 
+    qa_agent = _orchestrator.agents["quality_assessment"]
+    qa_server = QualityAssessmentMCPServer(_architecture_sessions, qa_agent, llm=llm)
+
     app.mount("/mcp/architecture", architecture_server.sse_app())
     app.mount("/mcp/backend", backend_server.sse_app())
     app.mount("/mcp/frontend", frontend_server.sse_app())
     app.mount("/mcp/orchestrate", orchestrator_server.sse_app())
     app.mount("/mcp/solid", solid_server.sse_app())
     app.mount("/mcp/design-patterns", dp_server.sse_app())
+    app.mount("/mcp/quality-assessment", qa_server.sse_app())
 
 
 def cli():
