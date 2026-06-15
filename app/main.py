@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     go_label = go_model if go_model else "fallback to LLM_MODEL_1"
     print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
     print(f"✓ Go agent LLM: {go_label if token else 'disabled (no token)'}")
-    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate")
+    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid")
     yield
 
 
@@ -210,7 +210,7 @@ async def health():
         "status": "healthy",
         "skills_registered": len(SkillRegistry.names()),
         "llm_enabled": _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
-        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate"],
+        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate", "/mcp/solid"],
     }
 
 
@@ -1003,6 +1003,8 @@ async def mount_mcp_servers():
     from app.mcp.backend_mcp import BackendMCPServer
     from app.mcp.frontend_mcp import FrontendMCPServer
     from app.mcp.orchestrator_mcp import OrchestratorMCPServer
+    from app.mcp.solid_mcp import SOLIDMCPServer
+    from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
 
     llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
 
@@ -1012,11 +1014,14 @@ async def mount_mcp_servers():
     orchestrator_server = OrchestratorMCPServer(
         _workflow_coordinator, _orchestrator, _architecture_sessions
     )
+    solid_agent = _orchestrator.agents["solid"]
+    solid_server = SOLIDMCPServer(_architecture_sessions, solid_agent, llm=llm)
 
     app.mount("/mcp/architecture", architecture_server.sse_app())
     app.mount("/mcp/backend", backend_server.sse_app())
     app.mount("/mcp/frontend", frontend_server.sse_app())
     app.mount("/mcp/orchestrate", orchestrator_server.sse_app())
+    app.mount("/mcp/solid", solid_server.sse_app())
 
 
 def cli():

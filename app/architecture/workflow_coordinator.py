@@ -98,6 +98,9 @@ class WorkflowCoordinator:
         if ctx.system_design is None and ctx.decision is not None:
             ctx = await self._design_partner.run(ctx)
 
+        if ctx.system_design is not None or ctx.decision is not None:
+            await self._run_solid_analysis(ctx)
+
         system_design = ctx.system_design
         pattern_name = (
             ctx.decision.primary_pattern.pattern.value.upper()
@@ -155,6 +158,18 @@ class WorkflowCoordinator:
         return output
 
     
+    async def _run_solid_analysis(self, ctx: PipelineContext) -> None:
+        """Auto-trigger SOLID analysis after design artifacts are produced."""
+        from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
+        solid_agent = self._orchestrator.agents.get("solid")
+        if not isinstance(solid_agent, SOLIDPrinciplesEnforcerAgent):
+            return
+        try:
+            report = await solid_agent.analyze(ctx)
+            ctx.metadata["solid_compliance_report"] = report
+        except Exception:
+            pass
+
     def _apply_forced_pattern(self, ctx: PipelineContext, pattern_name: str) -> PipelineContext:
         
         try:

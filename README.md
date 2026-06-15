@@ -416,8 +416,9 @@ CLI → POST /workflow/scaffold
 | `frontend` | 13 | State management, hooks, forms, animations, performance |
 | `vercel` | 5 | Deployment, environment config, edge functions |
 | `diagnostic` | 3 | Error diagnosis and fix — Go, Next.js, Python |
+| `solid` | 5 | SOLID Principles analysis — architecture-level compliance enforcement |
 
-**Total: 100 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
+**Total: 105 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
 
 ---
 
@@ -651,7 +652,7 @@ POST /architecture/clarify
 
 ## MCP Servers
 
-Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by any MCP-compatible client (Claude Desktop, custom agents):
+Five MCP (Model Context Protocol) SSE servers are mounted and can be consumed by any MCP-compatible client (Claude Desktop, custom agents):
 
 | Mount path | Purpose |
 |---|---|
@@ -659,6 +660,135 @@ Four MCP (Model Context Protocol) SSE servers are mounted and can be consumed by
 | `/mcp/backend` | Python/FastAPI skill execution |
 | `/mcp/frontend` | Next.js + design skill execution |
 | `/mcp/orchestrate` | Cross-agent orchestration |
+| `/mcp/solid` | SOLID compliance analysis — auto-triggered after design partner, also callable explicitly |
+
+---
+
+## SOLID Principles Enforcer Agent
+
+The `SOLIDPrinciplesEnforcerAgent` operates at the **architecture design level** — it analyses design artifacts (components, modules, ports, bounded contexts) rather than source code. It is **automatically triggered** after the design partner produces a system design within the workflow pipeline. Users never invoke it directly; the solution knows when to call it.
+
+### How it Works
+
+```
+Architecture Pipeline
+  DesignPartnerOrchestrator produces SystemDesignOutput
+                  │
+                  ▼ (automatic — WorkflowCoordinator)
+  SOLIDPrinciplesEnforcerAgent.analyze(PipelineContext)
+    │
+    ├── solid.srp_analyze   ─┐
+    ├── solid.ocp_analyze    │ parallel asyncio.gather
+    ├── solid.lsp_analyze    │ agent selects which skill per principle
+    ├── solid.isp_analyze    │
+    └── solid.dip_analyze   ─┘
+                  │
+                  ▼
+  SOLIDComplianceReport
+    ├── 5 × PrincipleResult (compliance_level, affected_components, recommendations)
+    ├── cross-principle correlations (cascade detection)
+    └── stored in ctx.metadata["solid_compliance_report"]
+```
+
+The agent accepts any design artifact union type:
+- `SolutionArchitectureDecision` (from decide_architecture stage)
+- `SystemDesignOutput` (from select_design_partner stage)
+- `PipelineContext` (full pipeline context — preferred, combines both)
+- `NormalizedDesignInput` (pre-normalised, for direct skill testing)
+
+### Five SOLID Skills
+
+Each skill performs deterministic, rule-based analysis — no LLM required, < 10 ms per skill.
+
+| Skill | Principle | Detects |
+|---|---|---|
+| `solid.srp_analyze` | Single Responsibility | Components with multiple responsibilities in description; domain components with infra tech hints; fat modules (> 3 responsibilities); services spanning multiple bounded contexts |
+| `solid.ocp_analyze` | Open/Closed | Hexagonal design without ports/adapters; multiple services without API gateway; service ports with no adapter implementations; domain services without communication protocol |
+| `solid.lsp_analyze` | Liskov Substitution | Driven ports with no substitutable adapter implementations; bounded contexts with inconsistent communication styles; domain services with explicit infra dependencies |
+| `solid.isp_analyze` | Interface Segregation | Fat API gateway serving > 4 heterogeneous services; shared database forcing full schema on all services; modules with > 4 exposed responsibilities; monolithic external integration layers |
+| `solid.dip_analyze` | Dependency Inversion | Domain/application components with infra technology hints (PostgreSQL, Redis, Kafka…); missing repository abstraction between domain and infrastructure; all bounded contexts communicating synchronously without abstraction |
+
+### Cross-Principle Correlation Detection
+
+After all five skills run, the agent detects cascade violations — one SOLID violation causing another:
+
+| Primary | Cascades to | Trigger |
+|---|---|---|
+| SRP | ISP | Component with multiple responsibilities also exposes a fat interface |
+| OCP | DIP | Missing abstractions (no ports) force high-level modules to depend on concretions |
+| DIP | LSP | Concrete infra dependencies prevent substitutability |
+| SRP | OCP | Multiple responsibilities make a component impossible to extend without modification |
+
+### MCP Tools (at `/mcp/solid`)
+
+| Tool | Description |
+|---|---|
+| `analyze_solid_compliance(session_id)` | Trigger full SOLID analysis for a session; stores report in session context |
+| `get_solid_report(session_id)` | Retrieve the complete SOLIDComplianceReport with all five principle results |
+| `get_principle_result(session_id, principle)` | Retrieve detailed result for one principle (`srp`, `ocp`, `lsp`, `isp`, `dip`) |
+
+### Resources
+
+| Resource URI | Returns |
+|---|---|
+| `solid://principles` | All five principles with their skill names and descriptions |
+| `solid://sessions` | Session IDs that have an existing SOLID compliance report |
+
+### SOLIDComplianceReport schema
+
+```json
+{
+  "report_id": "uuid",
+  "overall_compliance": "compliant | warning | violation",
+  "components_analyzed": 8,
+  "architecture_pattern": "microservices",
+  "analysis_summary": "SOLID analysis complete for microservices architecture. ...",
+  "principle_results": [
+    {
+      "principle": "srp",
+      "compliance_level": "violation",
+      "summary": "SRP violated in 2 component(s).",
+      "affected_components": [
+        {
+          "component_name": "OrderService",
+          "violation_description": "Domain component 'OrderService' declares infrastructure technology hints (postgresql, redis).",
+          "layer": "domain",
+          "component_type": "service"
+        }
+      ],
+      "recommendations": [
+        "Extract each distinct responsibility into a dedicated component or service.",
+        "Remove infrastructure concerns from domain-layer components; use repository or port abstractions instead."
+      ]
+    }
+  ],
+  "cross_principle_correlations": [
+    {
+      "primary_principle": "ocp",
+      "cascaded_principles": ["dip"],
+      "component_name": "Architecture",
+      "description": "Missing abstractions (OCP violation) cascade into DIP violations..."
+    }
+  ]
+}
+```
+
+### Acceptance Criteria (Issue #15)
+
+- [x] `SOLIDPrinciplesEnforcerAgent` with `analyze(design) -> SOLIDComplianceReport` interface
+- [x] Five `PrincipleResult` entries for any valid design input
+- [x] SRP: flags components with multiple responsibilities
+- [x] OCP: identifies missing extension points and components closed to extension
+- [x] LSP: detects ports without substitutable adapters and inconsistent contracts
+- [x] ISP: flags fat interfaces; recommends segregation and BFF patterns
+- [x] DIP: detects high-level modules depending on concrete infra; recommends abstraction injection
+- [x] Architecture-level analysis — works on design schemas, not source files
+- [x] Cross-principle correlations — at least 3 cascade scenarios detected
+- [x] 8 test scenarios with known violations, all passing
+- [x] Analysis completes in < 10 seconds for 30 components
+- [x] Auto-triggered after design partner — users never invoke the agent directly
+- [x] SOLID MCP at `/mcp/solid` with three tools
+- [x] Plug-and-play: no existing functionality removed
 
 ---
 
@@ -971,7 +1101,8 @@ app/
 │   ├── design_agent.py          # UI/UX and design systems specialist
 │   ├── frontend_agent.py        # React frontend patterns specialist
 │   ├── vercel_agent.py          # Vercel deployment specialist
-│   └── diagnostic_agent.py      # DiagnosticAgent — Go, Next.js, Python error fixing
+│   ├── diagnostic_agent.py      # DiagnosticAgent — Go, Next.js, Python error fixing
+│   └── solid_agent.py           # SOLIDPrinciplesEnforcerAgent — auto-triggered after design partner
 ├── skills/
 │   ├── base.py                  # BaseSkill, SkillResult, CodeArtifact, SkillCategory
 │   ├── registry.py              # SkillRegistry — @SkillRegistry.register decorator
@@ -995,11 +1126,18 @@ app/
 │   ├── design/                  # tailwind, shadcn, color_system, typography, …
 │   ├── frontend/                # state_management, forms, i18n, performance, …
 │   ├── vercel/                  # deployment, environment, edge_config, analytics
-│   └── diagnostic/
+│   ├── diagnostic/
+│   │   ├── __init__.py
+│   │   ├── go_diagnose.py       # diagnostic.go_diagnose — pattern-based + LLM fallback
+│   │   ├── nextjs_diagnose.py   # diagnostic.nextjs_diagnose
+│   │   └── python_diagnose.py   # diagnostic.python_diagnose
+│   └── solid/                   # SOLID Principles skills — 5 skills, SkillCategory.SOLID
 │       ├── __init__.py
-│       ├── go_diagnose.py       # diagnostic.go_diagnose — pattern-based + LLM fallback
-│       ├── nextjs_diagnose.py   # diagnostic.nextjs_diagnose
-│       └── python_diagnose.py   # diagnostic.python_diagnose
+│       ├── srp_skill.py         # solid.srp_analyze — Single Responsibility
+│       ├── ocp_skill.py         # solid.ocp_analyze — Open/Closed
+│       ├── lsp_skill.py         # solid.lsp_analyze — Liskov Substitution
+│       ├── isp_skill.py         # solid.isp_analyze — Interface Segregation
+│       └── dip_skill.py         # solid.dip_analyze — Dependency Inversion
 ├── architecture/
 │   ├── agents/
 │   │   ├── business_objective_parser.py
@@ -1015,6 +1153,7 @@ app/
 │   │   ├── solution.py          # SolutionArchitectureDecision
 │   │   ├── system_design.py
 │   │   ├── workflow.py
+│   │   ├── solid.py             # SOLIDComplianceReport, PrincipleResult, NormalizedDesignInput
 │   │   └── design_partner_plan.py  # DesignPartnerPlan, PartnerScore, PartnerActivation
 │   └── workflow_coordinator.py  # End-to-end pipeline + code generation router
 ├── cli/
@@ -1035,7 +1174,8 @@ app/
 │   ├── architecture_mcp.py      # MCP server: parse, clarify, decide, select_design_partner
 │   ├── backend_mcp.py           # MCP server: Python/FastAPI skills
 │   ├── frontend_mcp.py          # MCP server: Next.js + design skills
-│   └── orchestrator_mcp.py      # MCP server: cross-agent orchestration
+│   ├── orchestrator_mcp.py      # MCP server: cross-agent orchestration
+│   └── solid_mcp.py             # MCP server: SOLID compliance — analyze, get_report, get_principle_result
 └── main.py                      # FastAPI app, all routes, lifespan
 ```
 
