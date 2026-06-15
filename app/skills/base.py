@@ -16,6 +16,7 @@ class SkillCategory(str, Enum):
     GO = "go"
     DIAGNOSTIC = "diagnostic"
     SOLID = "solid"
+    DESIGN_PATTERNS = "design_patterns"
 
 
 @dataclass

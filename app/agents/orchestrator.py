@@ -11,6 +11,7 @@ from .backend_agent import BackendAgent
 from .go_agent import GoAgent
 from .diagnostic_agent import DiagnosticAgent
 from .solid_agent import SOLIDPrinciplesEnforcerAgent
+from .design_pattern_agent import DesignPatternRecommenderAgent
 
 if TYPE_CHECKING:
     from app.llm.base import BaseLLMProvider
@@ -39,6 +40,7 @@ class AgentOrchestrator:
             "go": GoAgent(llm=go_llm or llm),
             "diagnostic": DiagnosticAgent(llm=llm),
             "solid": SOLIDPrinciplesEnforcerAgent(llm=llm),
+            "design_patterns": DesignPatternRecommenderAgent(llm=llm),
         }
         self._bm25 = SkillBM25Index()
         self._bm25.build(
