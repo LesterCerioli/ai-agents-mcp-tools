@@ -1008,7 +1008,7 @@ async def architecture_quality_assessment(request: QualityAssessRequest):
 
     For best results, call /architecture/solid and /architecture/design-patterns first.
 
-    Returns the ArchitectureQualityReport with per-layer breakdown, top-5 improvement
+    Returns the QualityAssessmentReport with per-layer breakdown, top-5 improvement
     actions, overall health score, and health grade.
     """
     from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent

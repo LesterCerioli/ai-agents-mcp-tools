@@ -165,7 +165,7 @@ def create_quality_assessment_mcp(
         Args:
             session_id: Session ID with an existing quality assessment report.
 
-        Returns the full ArchitectureQualityReport as JSON.
+        Returns the full QualityAssessmentReport as JSON.
         """
         ctx = sessions.get(session_id)
         if ctx is None:

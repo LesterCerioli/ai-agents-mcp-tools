@@ -7,17 +7,54 @@ from app.skills.base import BaseSkill, CodeArtifact, SkillCategory, SkillParamet
 from app.skills.registry import SkillRegistry
 
 _BASE_SCORE_BY_STYLE: dict[str, float] = {
-    "microservices": 75.0,
-    "hexagonal": 65.0,
-    "monolith": 55.0,
+    "microservices": 70.0,
+    "hexagonal": 60.0,
+    "monolith": 45.0,
 }
 
-_SCALABILITY_PATTERNS: frozenset[str] = frozenset({
-    "cqrs", "event_sourcing", "saga", "outbox", "observer",
+# Patterns that indicate async / event-driven capabilities
+_ASYNC_PATTERNS: frozenset[str] = frozenset({
+    "event_sourcing", "observer", "saga", "outbox",
 })
 
-_HIGH_IMPACT_SCALABILITY: frozenset[str] = frozenset({"cqrs", "event_sourcing"})
-_MEDIUM_IMPACT_SCALABILITY: frozenset[str] = frozenset({"saga", "outbox", "observer"})
+# Patterns that indicate CQRS / horizontal read-write partitioning
+_PARTITIONING_PATTERNS: frozenset[str] = frozenset({
+    "cqrs",
+})
+
+# Patterns that support stateless request handling
+_STATELESS_PATTERNS: frozenset[str] = frozenset({
+    "cqrs", "event_sourcing", "proxy", "facade",
+})
+
+_STATELESS_KEYWORDS: frozenset[str] = frozenset({
+    "stateless", "jwt", "token", "oauth", "session-free",
+})
+
+
+def _infer_statelessness(inp: NormalizedDesignInput) -> bool:
+    """Infer statelessness from component technology hints and protocols."""
+    for comp in inp.components:
+        hints = " ".join(h.lower() for h in comp.get("technology_hints", []))
+        protocols = " ".join(p.lower() for p in comp.get("protocols", []))
+        combined = hints + " " + protocols
+        if any(kw in combined for kw in _STATELESS_KEYWORDS):
+            return True
+    # Microservices/hexagonal with gateway strongly implies stateless REST
+    if inp.has_gateway and inp.pattern.lower() in ("microservices", "hexagonal"):
+        return True
+    return False
+
+
+def _infer_partitioning(inp: NormalizedDesignInput, pattern_names: list[str]) -> bool:
+    """Infer workload partitioning: multiple services or CQRS."""
+    if inp.service_count > 2:
+        return True
+    if len(inp.bounded_contexts) > 1:
+        return True
+    if any(p.lower() in _PARTITIONING_PATTERNS for p in pattern_names):
+        return True
+    return False
 
 
 def _assess_scalability(
@@ -26,36 +63,62 @@ def _assess_scalability(
     pattern_names: list[str],
 ) -> QualityAttributeScore:
     style = architecture_style.lower()
-    score = _BASE_SCORE_BY_STYLE.get(style, 60.0)
+    score = _BASE_SCORE_BY_STYLE.get(style, 50.0)
     notes: list[str] = [f"Base scalability for '{style or 'unknown'}' architecture: {score}."]
 
-    if inp.has_gateway:
+    # ── Statelessness ──────────────────────────────────────────────────────────
+    stateless = _infer_statelessness(inp)
+    if stateless:
         score += 10.0
-        notes.append("API gateway enables load balancing and horizontal scaling.")
-
-    if inp.service_count > 3:
-        score += 5.0
-        notes.append(f"{inp.service_count} services allow independent scaling per workload.")
-
-    if inp.has_shared_database:
-        score -= 15.0
         notes.append(
-            "Shared database is a scalability bottleneck; consider database-per-service."
+            "Stateless design detected (JWT/token auth or stateless REST gateway): "
+            "enables horizontal scaling without session affinity."
+        )
+    else:
+        notes.append(
+            "No statelessness indicators found; session-based state limits horizontal scaling."
         )
 
+    # ── Partitioning ──────────────────────────────────────────────────────────
+    partitioned = _infer_partitioning(inp, pattern_names)
+    if partitioned:
+        score += 8.0
+        notes.append(
+            f"Workload partitioning detected ({inp.service_count} service(s) / "
+            f"{len(inp.bounded_contexts)} bounded context(s)): independent scaling per domain."
+        )
+    else:
+        notes.append(
+            "Single service or monolithic partition; individual components cannot scale independently."
+        )
+
+    # ── Async / event-driven patterns ─────────────────────────────────────────
     patterns_lower = {p.lower() for p in pattern_names}
-    high_impact = patterns_lower & _HIGH_IMPACT_SCALABILITY
-    medium_impact = patterns_lower & _MEDIUM_IMPACT_SCALABILITY
-
-    if high_impact:
-        bonus = min(len(high_impact) * 6.0, 12.0)
+    async_matched = patterns_lower & _ASYNC_PATTERNS
+    if async_matched:
+        bonus = min(len(async_matched) * 5.0, 12.0)
         score += bonus
-        notes.append(f"High-impact scalability patterns: {', '.join(sorted(high_impact))}.")
+        notes.append(
+            f"Async/event-driven patterns ({', '.join(sorted(async_matched))}): "
+            "decouple producers from consumers, improving throughput under load."
+        )
+    else:
+        notes.append(
+            "No async or event-driven patterns identified; tight coupling may create bottlenecks."
+        )
 
-    if medium_impact:
-        bonus = min(len(medium_impact) * 4.0, 8.0)
-        score += bonus
-        notes.append(f"Medium-impact scalability patterns: {', '.join(sorted(medium_impact))}.")
+    # ── API gateway ───────────────────────────────────────────────────────────
+    if inp.has_gateway:
+        score += 8.0
+        notes.append("API gateway enables load balancing and traffic partitioning.")
+
+    # ── Shared database bottleneck ────────────────────────────────────────────
+    if inp.has_shared_database:
+        score -= 18.0
+        notes.append(
+            "Shared database is a scaling bottleneck and prevents independent deployment; "
+            "migrate to database-per-service."
+        )
 
     score = max(10.0, min(100.0, score))
 
@@ -70,16 +133,26 @@ def _assess_scalability(
 class ScalabilityAssessSkill(BaseSkill):
     name = "quality_assessment.scalability_assess"
     description = (
-        "Assesses scalability quality attribute (0–100) based on the chosen architecture style "
-        "and recommended patterns. Microservices with CQRS/event-driven patterns score highest; "
-        "monoliths with a shared database score lowest."
+        "Assesses scalability quality attribute (0–100) based on statelessness indicators, "
+        "workload partitioning decisions, and async/event-driven patterns. "
+        "Microservices with CQRS/event-sourcing and a stateless API gateway score highest."
     )
     category = SkillCategory.QUALITY_ASSESSMENT
-    tags = ["quality", "scalability", "architecture", "patterns"]
+    tags = ["quality", "scalability", "statelessness", "partitioning", "async", "architecture"]
     parameters = [
         SkillParameter("design_input", "Serialized NormalizedDesignInput dict.", type="object"),
-        SkillParameter("architecture_style", "Architecture style (microservices, hexagonal, monolith).", type="string", required=False),
-        SkillParameter("pattern_names", "List of recommended design pattern names.", type="array", required=False),
+        SkillParameter(
+            "architecture_style",
+            "Architecture style (microservices, hexagonal, monolith).",
+            type="string",
+            required=False,
+        ),
+        SkillParameter(
+            "pattern_names",
+            "List of recommended design pattern names.",
+            type="array",
+            required=False,
+        ),
     ]
 
     async def execute(

@@ -7,11 +7,11 @@ import app.skills.quality_assessment  # noqa: F401 — registers all 5 quality s
 
 from app.architecture.schemas.quality_assessment import (
     ATTRIBUTE_WEIGHTS,
-    ArchitectureQualityReport,
     EffortLevel,
     ImpactLevel,
     ImprovementAction,
     LayerQualityScore,
+    QualityAssessmentReport,
     QualityAttribute,
     QualityAttributeScore,
     _health_grade,
@@ -402,12 +402,12 @@ class ArchitectureQualityAssessmentAgent(BaseAgent):
         design: "SolutionArchitectureDecision | SystemDesignOutput | PipelineContext | NormalizedDesignInput",
         solid_report: "SOLIDComplianceReport | None" = None,
         pattern_report: "PatternRecommendationReport | None" = None,
-    ) -> ArchitectureQualityReport:
+    ) -> QualityAssessmentReport:
         """
         Main entry point: assess architecture quality holistically.
 
         Accepts any pipeline design output type. All five quality skills run in
-        parallel; results are combined into a single ArchitectureQualityReport.
+        parallel; results are combined into a single QualityAssessmentReport.
         """
         inp = self._normalize(design)
         architecture_style = inp.pattern or ""
@@ -518,7 +518,7 @@ class ArchitectureQualityAssessmentAgent(BaseAgent):
             f"{pattern_note} {len(improvement_actions)} improvement action(s) identified."
         )
 
-        return ArchitectureQualityReport(
+        return QualityAssessmentReport(
             architecture_pattern=architecture_style,
             attribute_scores=attribute_scores,
             layer_quality_breakdown=layer_breakdown,

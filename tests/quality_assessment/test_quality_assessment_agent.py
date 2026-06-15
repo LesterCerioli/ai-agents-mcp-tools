@@ -13,7 +13,7 @@ import app.skills.quality_assessment  # noqa: F401 — registers all 5 quality s
 
 from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
 from app.architecture.schemas.quality_assessment import (
-    ArchitectureQualityReport,
+    QualityAssessmentReport,
     QualityAttribute,
 )
 from app.architecture.schemas.solid import (
@@ -259,7 +259,7 @@ async def test_excellent_architecture_scores_above_80():
 
     report = await agent.assess(design, solid_report=solid, pattern_report=patterns)
 
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
     assert report.overall_health_score >= 80.0, (
         f"Expected excellent score ≥ 80, got {report.overall_health_score}. "
         f"Attributes: {[(s.attribute.value, s.score) for s in report.attribute_scores]}"
@@ -279,7 +279,7 @@ async def test_good_architecture_scores_between_60_and_80():
 
     report = await agent.assess(design, solid_report=solid, pattern_report=patterns)
 
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
     assert 60.0 <= report.overall_health_score < 80.0, (
         f"Expected good score in [60, 80), got {report.overall_health_score}. "
         f"Attributes: {[(s.attribute.value, s.score) for s in report.attribute_scores]}"
@@ -297,7 +297,7 @@ async def test_poor_architecture_scores_between_40_and_60():
 
     report = await agent.assess(design, solid_report=solid, pattern_report=patterns)
 
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
     assert 40.0 <= report.overall_health_score < 60.0, (
         f"Expected poor score in [40, 60), got {report.overall_health_score}. "
         f"Attributes: {[(s.attribute.value, s.score) for s in report.attribute_scores]}"
@@ -315,7 +315,7 @@ async def test_failing_architecture_scores_below_40():
 
     report = await agent.assess(design, solid_report=solid, pattern_report=patterns)
 
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
     assert report.overall_health_score <= 40.0, (
         f"Expected failing score ≤ 40, got {report.overall_health_score}. "
         f"Attributes: {[(s.attribute.value, s.score) for s in report.attribute_scores]}"
@@ -381,7 +381,7 @@ async def test_report_without_solid_or_pattern_context():
 
     report = await agent.assess(design, solid_report=None, pattern_report=None)
 
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
     assert report.overall_health_score > 0
     assert len(report.attribute_scores) == 5
 
@@ -400,7 +400,7 @@ async def test_report_generation_is_fast(benchmark=None):
     elapsed = time.monotonic() - start
 
     assert elapsed < 8.0, f"Report took {elapsed:.2f}s — exceeded 8s limit."
-    assert isinstance(report, ArchitectureQualityReport)
+    assert isinstance(report, QualityAssessmentReport)
 
 
 @pytest.mark.asyncio

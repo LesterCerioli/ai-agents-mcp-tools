@@ -78,7 +78,15 @@ def _health_grade(score: float) -> str:
     return "Critical"
 
 
-class ArchitectureQualityReport(BaseModel):
+class QualityAssessmentReport(BaseModel):
+    """
+    Holistic architecture quality report produced by ArchitectureQualityAssessmentAgent.
+
+    Contains five scored quality attributes (0–100 each), per-layer breakdown
+    across presentation/application/domain/infrastructure, top-5 ranked improvement
+    actions with effort/impact estimates, and a weighted overall health score.
+    """
+
     report_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     architecture_pattern: str = ""
     attribute_scores: list[QualityAttributeScore] = Field(default_factory=list)
