@@ -155,7 +155,6 @@ class AskRequest(BaseModel):
     project_context: dict[str, Any] = {}
 
 
-# ── CLI Installer Downloads ───────────────────────────────────────────────────
 
 @app.get("/cli/download/linux", tags=["CLI"])
 async def download_linux():
@@ -185,6 +184,17 @@ async def cli_install_script():
     return PlainTextResponse(content=content, media_type="text/plain")
 
 
+@app.get("/cli/version", tags=["CLI"])
+async def cli_version():
+    """Latest CLI version available, matching the binaries this deploy serves.
+
+    Installed CLIs poll this to detect when `agents update` should run instead
+    of requiring users to reinstall from scratch.
+    """
+    from app.cli._version import CLI_VERSION
+    return {"version": CLI_VERSION}
+
+
 @app.get("/cli/status", tags=["CLI"])
 async def cli_status():
     """Check which CLI installers are available for download."""
@@ -196,7 +206,6 @@ async def cli_status():
     }
 
 
-# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
 async def root():

@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from app.cli._version import CLI_VERSION
 from app.cli.client import AgentsClient
 
 app = typer.Typer(
@@ -18,6 +19,9 @@ app = typer.Typer(
 )
 console = Console()
 
+_UPDATE_CHECK_FILE = Path.home() / ".agents-cli" / "update_check.json"
+_UPDATE_CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # once a day, to avoid extra latency on every run
+
 
 def _get_platform_agent():
     if platform.system() == "Windows":
@@ -25,6 +29,63 @@ def _get_platform_agent():
         return WindowsPlatformAgent()
     from app.cli.platforms.linux import LinuxPlatformAgent
     return LinuxPlatformAgent()
+
+
+def _parse_version(v: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in v.strip().split("."))
+    except Exception:
+        return (0,)
+
+
+def _is_newer(remote: str, local: str) -> bool:
+    return _parse_version(remote) > _parse_version(local)
+
+
+def _latest_known_version(api_url: Optional[str] = None) -> Optional[str]:
+    """Best-effort, cached check for the latest published CLI version.
+
+    Never raises — a failure here must never block a normal command. Cached
+    for a day so it doesn't add a network round-trip to every invocation.
+    """
+    import json
+    import time
+
+    now = time.time()
+    try:
+        if _UPDATE_CHECK_FILE.exists():
+            cached = json.loads(_UPDATE_CHECK_FILE.read_text())
+            if now - cached.get("checked_at", 0) < _UPDATE_CHECK_INTERVAL_SECONDS:
+                return cached.get("latest_version") or None
+    except Exception:
+        pass
+
+    try:
+        client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+        latest = client.cli_version().get("version", "")
+    except Exception:
+        return None
+
+    try:
+        _UPDATE_CHECK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _UPDATE_CHECK_FILE.write_text(json.dumps({"checked_at": now, "latest_version": latest}))
+    except Exception:
+        pass
+
+    return latest or None
+
+
+@app.callback()
+def _main(ctx: typer.Context):
+    """Runs before every command — warns (cheaply, never blocking) if a newer CLI is out."""
+    if ctx.invoked_subcommand in (None, "update"):
+        return
+    latest = _latest_known_version()
+    if latest and _is_newer(latest, CLI_VERSION):
+        console.print(
+            f"[yellow]![/yellow] [dim]Nova versão do Agents CLI disponível: "
+            f"{latest} (você está na {CLI_VERSION}). Rode [bold]agents update[/bold] para atualizar.[/dim]\n"
+        )
 
 
 def _collect_artifacts(result: dict) -> list[dict]:
@@ -717,10 +778,101 @@ def diagnose(
 
 
 @app.command()
+def update(
+    force: bool = typer.Option(False, "--force", "-f", help="Reinstall even if already on the latest version"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Download and install the latest Agents CLI binary, replacing the one currently running."""
+    import shutil as _shutil
+    import stat
+    import subprocess
+    import tempfile
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — current version [bold]{CLI_VERSION}[/bold]")
+
+    try:
+        latest = client.cli_version().get("version", "")
+    except Exception as e:
+        console.print(f"[bold red]✗[/bold red] Could not check the latest version: {e}")
+        raise typer.Exit(1)
+
+    if not latest:
+        console.print("[bold red]✗[/bold red] Server did not return a version.")
+        raise typer.Exit(1)
+
+    if not force and not _is_newer(latest, CLI_VERSION):
+        console.print(f"[bold green]✓[/bold green] Already up to date (v{CLI_VERSION}).")
+        return
+
+    is_windows = platform.system() == "Windows"
+    target_os = "windows" if is_windows else "linux"
+
+    raw_exe = sys.executable if getattr(sys, "frozen", False) else (_shutil.which("agents") or "")
+    current_exe = Path(raw_exe) if raw_exe else None
+    if not current_exe or not current_exe.exists() or "python" in current_exe.name.lower():
+        console.print(
+            "[yellow]![/yellow] `agents update` only works for the installed binary "
+            "(not when running from source, e.g. via `python -m`).\n"
+            f"[dim]Reinstall manually: curl -fsSL {client._base}/cli/install.sh | bash[/dim]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[dim]New version available: {latest}[/dim]")
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Downloading v{latest}...", total=None)
+
+        tmp_fd, tmp_name = tempfile.mkstemp(dir=str(current_exe.parent), prefix=".agents-update-")
+        os.close(tmp_fd)
+        tmp_path = Path(tmp_name)
+
+        try:
+            client.download_cli_binary(tmp_path, target_os=target_os)
+        except Exception as e:
+            progress.stop()
+            tmp_path.unlink(missing_ok=True)
+            console.print(f"[bold red]✗[/bold red] Download failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Installing...")
+
+        if not is_windows:
+            tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+            try:
+                os.replace(tmp_path, current_exe)
+            except PermissionError:
+                progress.stop()
+                console.print(f"[yellow]![/yellow] Permission denied writing to {current_exe} — retrying with sudo...")
+                rc = subprocess.run(["sudo", "mv", str(tmp_path), str(current_exe)]).returncode
+                if rc != 0:
+                    console.print("[bold red]✗[/bold red] Update failed.")
+                    raise typer.Exit(1)
+        else:
+            # Windows refuses to overwrite a running .exe. Stage the new binary
+            # next to the current one and finish the swap with a short-lived
+            # detached helper once this process exits.
+            staged = current_exe.with_name(current_exe.stem + ".new.exe")
+            tmp_path.replace(staged)
+            subprocess.Popen(
+                ["cmd", "/c", "timeout", "/t", "2", "&&", "move", "/Y", str(staged), str(current_exe)],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0),
+            )
+
+        progress.stop()
+
+    if is_windows:
+        console.print(f"[bold green]✓[/bold green] v{latest} staged — finishing install in a few seconds. Re-open your terminal.")
+    else:
+        console.print(f"[bold green]✓[/bold green] Updated to v{latest}.")
+
+
+@app.command()
 def version():
     """Show CLI version and API status."""
     client = AgentsClient()
-    console.print("[bold cyan]Agents CLI[/bold cyan] v0.1.0")
+    console.print(f"[bold cyan]Agents CLI[/bold cyan] v{CLI_VERSION}")
     console.print(f"Platform: [dim]{platform.system()} {platform.machine()}[/dim]")
 
     try:
@@ -728,6 +880,10 @@ def version():
         console.print(f"API: [bold green]online[/bold green] — {health.get('skills_registered', 0)} skills registered")
     except Exception:
         console.print("API: [bold red]unreachable[/bold red]")
+
+    latest = _latest_known_version()
+    if latest and _is_newer(latest, CLI_VERSION):
+        console.print(f"\n[yellow]![/yellow] Update available: {latest}. Run [bold]agents update[/bold].")
 
 
 def cli():
