@@ -806,8 +806,19 @@ def update(
         console.print(f"[bold green]✓[/bold green] Already up to date (v{CLI_VERSION}).")
         return
 
-    is_windows = platform.system() == "Windows"
-    target_os = "windows" if is_windows else "linux"
+    system = platform.system()
+    if system == "Windows":
+        is_windows = True
+        target_os = "windows"
+    elif system == "Linux":
+        is_windows = False
+        target_os = "linux"
+    else:
+        console.print(
+            f"[bold red]✗[/bold red] Self-update is not supported on {system} yet. "
+            "Please reinstall using a supported release artifact."
+        )
+        raise typer.Exit(1)
 
     raw_exe = sys.executable if getattr(sys, "frozen", False) else (_shutil.which("agents") or "")
     current_exe = Path(raw_exe) if raw_exe else None
@@ -824,7 +835,13 @@ def update(
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
         task = progress.add_task(f"Downloading v{latest}...", total=None)
 
-        tmp_fd, tmp_name = tempfile.mkstemp(dir=str(current_exe.parent), prefix=".agents-update-")
+        try:
+            tmp_fd, tmp_name = tempfile.mkstemp(dir=str(current_exe.parent), prefix=".agents-update-")
+        except PermissionError:
+            # Common system installs (e.g. /usr/local/bin) aren't writable by a
+            # regular user — fall back to the system temp dir. The install step
+            # below already handles the privileged move via sudo.
+            tmp_fd, tmp_name = tempfile.mkstemp(prefix=".agents-update-")
         os.close(tmp_fd)
         tmp_path = Path(tmp_name)
 
@@ -842,9 +859,12 @@ def update(
             tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
             try:
                 os.replace(tmp_path, current_exe)
-            except PermissionError:
+            except OSError:
+                # Covers both PermissionError (e.g. /usr/local/bin not writable)
+                # and cross-device rename failures when the temp file fell back
+                # to a different filesystem than current_exe's directory.
                 progress.stop()
-                console.print(f"[yellow]![/yellow] Permission denied writing to {current_exe} — retrying with sudo...")
+                console.print(f"[yellow]![/yellow] Could not replace {current_exe} directly — retrying with sudo...")
                 rc = subprocess.run(["sudo", "mv", str(tmp_path), str(current_exe)]).returncode
                 if rc != 0:
                     console.print("[bold red]✗[/bold red] Update failed.")
