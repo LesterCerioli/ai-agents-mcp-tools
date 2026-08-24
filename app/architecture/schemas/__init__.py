@@ -6,6 +6,19 @@ from .design_partner_plan import (
     PartnerScore,
     SelectionRationale,
 )
+from .feedback import (
+    ArchitectureFeedback,
+    ArchitectureStage,
+    ConvergenceWarning,
+    FeedbackProcessingResult,
+    FeedbackType,
+    IterationRecord,
+    PipelineExecutionLog,
+    SectionDiff,
+    StageExecutionEntry,
+    StageExecutionStatus,
+    TargetSection,
+)
 from .requirements import (
     ArchitectureRequirements,
     AvailabilityRequirement,
@@ -18,11 +31,11 @@ from .requirements import (
     TeamSizeSignal,
 )
 from .solution import (
+    AntiPatternViolation,
     ArchitecturalDriver,
+    ArchitectureGap,
     ArchitectureLayer,
     ArchitecturePattern,
-    ArchitectureGap,
-    AntiPatternViolation,
     ComponentType,
     DecisionComponent,
     DiagramEdge,
@@ -40,6 +53,17 @@ from .solution import (
 )
 
 __all__ = [
+    "ArchitectureFeedback",
+    "ArchitectureStage",
+    "ConvergenceWarning",
+    "FeedbackProcessingResult",
+    "FeedbackType",
+    "IterationRecord",
+    "PipelineExecutionLog",
+    "SectionDiff",
+    "StageExecutionEntry",
+    "StageExecutionStatus",
+    "TargetSection",
     "DesignPartnerPlan",
     "PartnerActivation",
     "PartnerConfiguration",

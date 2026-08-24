@@ -11,18 +11,22 @@ except ImportError:
 
 API_BASE_URL = os.getenv("AGENTS_API_URL", _BAKED_URL).rstrip("/")
 
-if not API_BASE_URL:
-    raise RuntimeError(
-        "AGENTS_API_URL is not set. "
-        "Set this environment variable before running the CLI."
-    )
+
+def _get_api_base_url() -> str:
+    url = os.getenv("AGENTS_API_URL", _BAKED_URL).rstrip("/")
+    if not url:
+        raise RuntimeError(
+            "AGENTS_API_URL is not set. "
+            "Set this environment variable before running the CLI."
+        )
+    return url
 
 TIMEOUT = 120.0
 
 
 class AgentsClient:
-    def __init__(self, base_url: str = API_BASE_URL) -> None:
-        self._base = base_url
+    def __init__(self, base_url: str | None = None) -> None:
+        self._base = base_url or _get_api_base_url()
 
     def health(self) -> dict[str, Any]:
         with httpx.Client(timeout=10.0) as c:

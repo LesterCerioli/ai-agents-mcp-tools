@@ -7,6 +7,7 @@ from app.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAge
 from app.architecture.agents.validation_agent import SolutionArchitectureValidationAgent
 from app.architecture.agents.system.design_partner_orchestrator import DesignPartnerOrchestrator
 from app.architecture.context.pipeline_context import PipelineContext
+from app.architecture.schemas.feedback import ArchitectureStage
 from app.architecture.schemas.system_design import (
     MicroservicesSystemDesign,
     MonolithSystemDesign,
@@ -160,6 +161,37 @@ class WorkflowCoordinator:
         return output
 
     
+    async def run_stage(self, stage: ArchitectureStage, ctx: PipelineContext) -> PipelineContext:
+        """Run a single pipeline stage for selective re-evaluation.
+
+        Stages whose upstream inputs are missing are no-ops. Derived state is
+        cleared before re-running so stale outputs never survive a stage rerun.
+        """
+        if stage == ArchitectureStage.REQUIREMENTS_PARSE:
+            await self._parser.run(ctx)
+        elif stage == ArchitectureStage.SOLUTION_STRATEGY:
+            ctx.decision = None
+            ctx.diagram = None
+            ctx.metadata.pop("validation_report", None)
+            if ctx.requirements is not None:
+                ctx = await self._decision_engine.run(ctx)
+        elif stage == ArchitectureStage.FLOW_DIAGRAM:
+            if ctx.decision is not None:
+                ctx = await self._diagram_agent.run(ctx)
+        elif stage == ArchitectureStage.VALIDATION:
+            if ctx.decision is not None and ctx.requirements is not None:
+                ctx = await self._validation_agent.run(ctx)
+        elif stage == ArchitectureStage.DESIGN_PARTNER:
+            ctx.system_design = None
+            ctx = await self._design_partner.run(ctx)
+        elif stage == ArchitectureStage.SOLID_ANALYSIS:
+            await self._run_solid_analysis(ctx)
+        elif stage == ArchitectureStage.PATTERN_RECOMMENDATION:
+            await self._run_pattern_recommendation(ctx)
+        elif stage == ArchitectureStage.QUALITY_ASSESSMENT:
+            await self._run_quality_assessment(ctx)
+        return ctx
+
     async def _run_solid_analysis(self, ctx: PipelineContext) -> None:
         """Auto-trigger SOLID analysis after design artifacts are produced."""
         from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
