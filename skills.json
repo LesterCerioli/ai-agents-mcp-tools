@@ -1,0 +1,4249 @@
+{
+  "skills": [
+    {
+      "name": "nextjs.generate_component",
+      "description": "Generate a production-ready Next.js component (Server or Client) with TypeScript, proper types, Tailwind CSS or styled-components, accessibility, and Next.js 15 best practices.",
+      "category": "nextjs",
+      "tags": [
+        "component",
+        "react",
+        "typescript",
+        "rsc",
+        "client"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Component name in PascalCase (e.g. UserCard, ProductList)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What the component does and what data it displays",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "type",
+          "description": "Component type",
+          "type": "string",
+          "required": false,
+          "default": "server",
+          "enum": [
+            "server",
+            "client",
+            "shared"
+          ]
+        },
+        {
+          "name": "props",
+          "description": "Comma-separated prop names (e.g. userId, title, onClose)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features to include: loading, skeleton, error, empty-state, animation, pagination",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "styling",
+          "description": "Styling library to use",
+          "type": "string",
+          "required": false,
+          "default": "tailwind",
+          "enum": [
+            "tailwind",
+            "tailwind+shadcn",
+            "css-modules",
+            "styled-components"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_page",
+      "description": "Generate a Next.js App Router page (page.tsx) with proper metadata, async data fetching, TypeScript params, and loading/error boundaries.",
+      "category": "nextjs",
+      "tags": [
+        "page",
+        "app-router",
+        "metadata",
+        "typescript"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Route path (e.g. /products, /blog/[slug], /dashboard/settings)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What this page shows and does",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated: metadata, dynamic-params, suspense, auth-check, breadcrumbs",
+          "type": "string",
+          "required": false,
+          "default": "metadata"
+        },
+        {
+          "name": "data_source",
+          "description": "Where data comes from (e.g. database, REST API, GraphQL)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_layout",
+      "description": "Generate a Next.js layout.tsx with providers, navigation, sidebar, font loading, and proper metadata configuration.",
+      "category": "nextjs",
+      "tags": [
+        "layout",
+        "app-router",
+        "providers",
+        "navigation"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Layout name (e.g. Root, Dashboard, Marketing)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "route",
+          "description": "Route segment (e.g. / for root, /dashboard for dashboard layout)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "includes",
+          "description": "Comma-separated elements: navbar, sidebar, footer, providers, toast, auth-guard",
+          "type": "string",
+          "required": false,
+          "default": "navbar,footer"
+        },
+        {
+          "name": "fonts",
+          "description": "Google Fonts to load via next/font (e.g. Inter, Geist, Roboto)",
+          "type": "string",
+          "required": false,
+          "default": "Geist"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_loading",
+      "description": "Generate loading.tsx with skeleton screens that match the page layout, using Suspense boundaries and accessible loading states.",
+      "category": "nextjs",
+      "tags": [
+        "loading",
+        "skeleton",
+        "suspense",
+        "ux"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Route segment this loading screen is for",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "layout",
+          "description": "Description of the page layout to create matching skeletons",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "description": "Loading style",
+          "type": "string",
+          "required": false,
+          "default": "skeleton",
+          "enum": [
+            "skeleton",
+            "spinner",
+            "shimmer",
+            "pulse"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_error_page",
+      "description": "Generate error.tsx and global-error.tsx with retry functionality, user-friendly messages, and error reporting integration.",
+      "category": "nextjs",
+      "tags": [
+        "error",
+        "error-boundary",
+        "client",
+        "ux"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Route this error boundary covers",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "type",
+          "description": "Error page type",
+          "type": "string",
+          "required": false,
+          "default": "error",
+          "enum": [
+            "error",
+            "global-error",
+            "not-found"
+          ]
+        },
+        {
+          "name": "reporting",
+          "description": "Error reporting service",
+          "type": "string",
+          "required": false,
+          "default": "none",
+          "enum": [
+            "none",
+            "sentry",
+            "console"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_form_component",
+      "description": "Generate a React form component with React Hook Form, Zod validation, Server Actions integration, accessible error messages, and shadcn/ui fields.",
+      "category": "nextjs",
+      "tags": [
+        "form",
+        "react-hook-form",
+        "zod",
+        "server-action",
+        "validation"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Form component name (e.g. LoginForm, CreateProductForm)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions (e.g. email:email, password:password, name:text)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "action",
+          "description": "What the form does when submitted (e.g. create a user, login, update product)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "submit_type",
+          "description": "How the form submits",
+          "type": "string",
+          "required": false,
+          "default": "server-action",
+          "enum": [
+            "server-action",
+            "api-route",
+            "mutation"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.setup_styled_components",
+      "description": "Set up styled-components v6 with Next.js 15 App Router: SSR registry, ThemeProvider, global styles, next.config.ts, and TypeScript theme types.",
+      "category": "nextjs",
+      "tags": [
+        "styled-components",
+        "css-in-js",
+        "ssr",
+        "theme",
+        "setup"
+      ],
+      "parameters": [
+        {
+          "name": "theme_tokens",
+          "description": "Comma-separated design tokens as name:value (e.g. primary:#7c3aed,secondary:#0ea5e9,radius:8px,fontSans:Inter)",
+          "type": "string",
+          "required": false,
+          "default": "primary:#7c3aed,secondary:#0ea5e9,background:#ffffff,text:#0f0f0f,radius:8px"
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: dark-mode, global-styles, animations",
+          "type": "string",
+          "required": false,
+          "default": "global-styles,dark-mode"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.decompose_into_components",
+      "description": "Analyze a UI description and decompose it into a component hierarchy following atomic design principles: atoms, molecules, organisms, and generate each component.",
+      "category": "nextjs",
+      "tags": [
+        "componentization",
+        "atomic-design",
+        "architecture",
+        "decomposition",
+        "composition"
+      ],
+      "parameters": [
+        {
+          "name": "ui_description",
+          "description": "Full description of the UI to decompose (e.g. e-commerce product listing page with header, filters sidebar, product grid, product cards, pagination)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "styling",
+          "description": "Styling approach for all generated components",
+          "type": "string",
+          "required": false,
+          "default": "tailwind",
+          "enum": [
+            "tailwind",
+            "tailwind+shadcn",
+            "styled-components",
+            "css-modules"
+          ]
+        },
+        {
+          "name": "granularity",
+          "description": "How deep to decompose",
+          "type": "string",
+          "required": false,
+          "default": "molecules",
+          "enum": [
+            "atoms",
+            "molecules",
+            "organisms"
+          ]
+        },
+        {
+          "name": "generate_code",
+          "description": "Generate actual component code (requires LLM for best results)",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_route_structure",
+      "description": "Design and generate the optimal Next.js App Router file structure for a given application type, with route groups and organization patterns.",
+      "category": "nextjs",
+      "tags": [
+        "routing",
+        "architecture",
+        "app-router",
+        "file-structure"
+      ],
+      "parameters": [
+        {
+          "name": "app_type",
+          "description": "Type of application (e.g. SaaS dashboard, e-commerce, blog, marketing site)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated main features (e.g. auth, dashboard, billing, blog, admin)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "auth_strategy",
+          "description": "Authentication approach",
+          "type": "string",
+          "required": false,
+          "default": "nextauth",
+          "enum": [
+            "nextauth",
+            "clerk",
+            "supabase",
+            "none"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_middleware",
+      "description": "Generate Next.js middleware.ts for auth protection, redirects, locale detection, rate limiting, and request logging.",
+      "category": "nextjs",
+      "tags": [
+        "middleware",
+        "auth",
+        "redirects",
+        "edge",
+        "i18n"
+      ],
+      "parameters": [
+        {
+          "name": "features",
+          "description": "Comma-separated middleware features: auth-guard, locale, redirect-www, security-headers, rate-limit",
+          "type": "string",
+          "required": false,
+          "default": "auth-guard"
+        },
+        {
+          "name": "protected_paths",
+          "description": "Comma-separated protected route prefixes (e.g. /dashboard,/api,/admin)",
+          "type": "string",
+          "required": false,
+          "default": "/dashboard"
+        },
+        {
+          "name": "auth_provider",
+          "description": "Auth provider",
+          "type": "string",
+          "required": false,
+          "default": "nextauth",
+          "enum": [
+            "nextauth",
+            "clerk",
+            "supabase",
+            "custom"
+          ]
+        },
+        {
+          "name": "locales",
+          "description": "Supported locales (e.g. en,pt-BR,es)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_api_route",
+      "description": "Generate a Next.js App Router Route Handler at src/app/api/{name}/route.js. API routes are JavaScript files (not TypeScript) — the only JS exception in the project.",
+      "category": "nextjs",
+      "tags": [
+        "api-route",
+        "route-handler",
+        "rest",
+        "javascript"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "API route name or path relative to /api (e.g. products, users/[id], auth/login). Do not include /api/ prefix — it is added automatically.",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What this API endpoint does",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "methods",
+          "description": "HTTP methods to implement (comma-separated): GET, POST, PUT, PATCH, DELETE",
+          "type": "string",
+          "required": false,
+          "default": "GET,POST"
+        },
+        {
+          "name": "auth",
+          "description": "Require authentication",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false",
+            "optional"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_server_fetch",
+      "description": "Generate server-side data fetching with Next.js fetch() cache control, parallel fetching, Suspense boundaries, and proper TypeScript types.",
+      "category": "nextjs",
+      "tags": [
+        "data-fetching",
+        "server-component",
+        "cache",
+        "fetch"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Function name (e.g. getProducts, getUserProfile, getDashboardData)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "endpoint",
+          "description": "API endpoint or data source description",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "strategy",
+          "description": "Caching strategy",
+          "type": "string",
+          "required": false,
+          "default": "revalidate",
+          "enum": [
+            "static",
+            "revalidate",
+            "dynamic",
+            "no-store"
+          ]
+        },
+        {
+          "name": "revalidate_seconds",
+          "description": "Revalidation interval in seconds (for 'revalidate' strategy)",
+          "type": "string",
+          "required": false,
+          "default": "3600"
+        },
+        {
+          "name": "return_type",
+          "description": "TypeScript return type (e.g. Product[], UserProfile, DashboardData)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_streaming_page",
+      "description": "Generate a Next.js streaming page using Suspense boundaries for progressive rendering, improving TTFB and perceived performance.",
+      "category": "nextjs",
+      "tags": [
+        "streaming",
+        "suspense",
+        "performance",
+        "ux"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Page route (e.g. /dashboard, /products/[id])",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sections",
+          "description": "Comma-separated sections to stream independently (e.g. header:fast, stats:slow, chart:slow, feed:medium)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What the page displays",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "nextjs.implement_isr",
+      "description": "Implement Incremental Static Regeneration (ISR) with generateStaticParams for dynamic routes, on-demand revalidation, and fallback strategies.",
+      "category": "nextjs",
+      "tags": [
+        "isr",
+        "static-generation",
+        "generateStaticParams",
+        "revalidation"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Dynamic route (e.g. /blog/[slug], /products/[id]/[variant])",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "entity",
+          "description": "Entity being rendered (e.g. blog post, product, article)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "revalidate_seconds",
+          "description": "How often to revalidate in seconds",
+          "type": "string",
+          "required": false,
+          "default": "3600"
+        },
+        {
+          "name": "fallback",
+          "description": "Fallback for ungenerated pages",
+          "type": "string",
+          "required": false,
+          "default": "blocking",
+          "enum": [
+            "blocking",
+            "true",
+            "false"
+          ]
+        },
+        {
+          "name": "total_items",
+          "description": "Approximate total items to pre-generate (0 = none)",
+          "type": "string",
+          "required": false,
+          "default": "100"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_server_action",
+      "description": "Generate a Next.js Server Action with Zod validation, error handling, revalidatePath/revalidateTag, and proper TypeScript types.",
+      "category": "nextjs",
+      "tags": [
+        "server-action",
+        "mutation",
+        "zod",
+        "revalidate"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Action function name (e.g. createProduct, updateUser, deletePost)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What the action does (e.g. creates a product in the database)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "inputs",
+          "description": "Comma-separated input fields (e.g. title:string, price:number, userId:string)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "revalidate",
+          "description": "Path or tag to revalidate after mutation (e.g. /products, products)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "db",
+          "description": "Database/ORM being used",
+          "type": "string",
+          "required": false,
+          "default": "prisma",
+          "enum": [
+            "prisma",
+            "drizzle",
+            "supabase",
+            "raw"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.implement_optimistic_update",
+      "description": "Implement optimistic UI updates using React 19 useOptimistic hook for instant feedback while server mutation is in flight.",
+      "category": "nextjs",
+      "tags": [
+        "optimistic-ui",
+        "useOptimistic",
+        "server-action",
+        "ux"
+      ],
+      "parameters": [
+        {
+          "name": "component_name",
+          "description": "Name of the component that needs optimistic updates",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "entity",
+          "description": "Entity being mutated (e.g. post, comment, todo, like)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "operations",
+          "description": "Comma-separated CRUD operations to optimize: create, update, delete, toggle",
+          "type": "string",
+          "required": false,
+          "default": "create,delete"
+        },
+        {
+          "name": "list_type",
+          "description": "How items are displayed (e.g. list, grid, table)",
+          "type": "string",
+          "required": false,
+          "default": "list"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_crud_actions",
+      "description": "Generate a complete set of CRUD Server Actions (create, read, update, delete) for an entity with Zod validation, auth checks, and cache revalidation.",
+      "category": "nextjs",
+      "tags": [
+        "crud",
+        "server-action",
+        "database",
+        "zod"
+      ],
+      "parameters": [
+        {
+          "name": "entity",
+          "description": "Entity name (e.g. product, user, post, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated fields with types (e.g. title:string, price:number, published:boolean)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "db",
+          "description": "ORM/database",
+          "type": "string",
+          "required": false,
+          "default": "prisma",
+          "enum": [
+            "prisma",
+            "drizzle",
+            "supabase"
+          ]
+        },
+        {
+          "name": "route",
+          "description": "Route to revalidate (e.g. /products, /dashboard/posts)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "nextjs.setup_nextauth",
+      "description": "Set up NextAuth.js v5 (Auth.js) with OAuth providers, credentials, database adapter, session management, and TypeScript types.",
+      "category": "nextjs",
+      "tags": [
+        "auth",
+        "nextauth",
+        "oauth",
+        "session",
+        "jwt"
+      ],
+      "parameters": [
+        {
+          "name": "providers",
+          "description": "Comma-separated OAuth providers: google, github, discord, twitter, credentials",
+          "type": "string",
+          "required": false,
+          "default": "google,github"
+        },
+        {
+          "name": "adapter",
+          "description": "Database adapter",
+          "type": "string",
+          "required": false,
+          "default": "prisma",
+          "enum": [
+            "prisma",
+            "drizzle",
+            "supabase",
+            "mongodb",
+            "none"
+          ]
+        },
+        {
+          "name": "session_strategy",
+          "description": "Session strategy",
+          "type": "string",
+          "required": false,
+          "default": "database",
+          "enum": [
+            "database",
+            "jwt"
+          ]
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: rbac, email-verification, 2fa, callbacks",
+          "type": "string",
+          "required": false,
+          "default": "callbacks"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_protected_route",
+      "description": "Generate a protected page/layout that validates session, redirects unauthenticated users, and supports role-based access control.",
+      "category": "nextjs",
+      "tags": [
+        "auth",
+        "protected",
+        "rbac",
+        "session"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Route to protect (e.g. /dashboard, /admin)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "component_type",
+          "description": "Component type",
+          "type": "string",
+          "required": false,
+          "default": "page",
+          "enum": [
+            "page",
+            "layout"
+          ]
+        },
+        {
+          "name": "required_role",
+          "description": "Required user role (leave empty for any authenticated user)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "redirect_to",
+          "description": "Redirect destination if not authorized",
+          "type": "string",
+          "required": false,
+          "default": "/login"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.optimize_images",
+      "description": "Generate optimized image components using next/image with proper sizing, priority loading, blur placeholder, and responsive srcset patterns.",
+      "category": "nextjs",
+      "tags": [
+        "performance",
+        "images",
+        "next/image",
+        "core-web-vitals",
+        "lcp"
+      ],
+      "parameters": [
+        {
+          "name": "use_case",
+          "description": "Image use case (e.g. hero banner, product card, avatar, gallery, blog thumbnail)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source",
+          "description": "Image source type",
+          "type": "string",
+          "required": false,
+          "default": "remote",
+          "enum": [
+            "local",
+            "remote",
+            "cms",
+            "cloudinary",
+            "s3"
+          ]
+        },
+        {
+          "name": "remote_domains",
+          "description": "Comma-separated remote domains (for remote sources)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "nextjs.optimize_fonts",
+      "description": "Set up zero-layout-shift font loading with next/font/google, CSS variable integration, fallback fonts, and Tailwind configuration.",
+      "category": "nextjs",
+      "tags": [
+        "performance",
+        "fonts",
+        "cls",
+        "next/font",
+        "tailwind"
+      ],
+      "parameters": [
+        {
+          "name": "fonts",
+          "description": "Comma-separated fonts with weights (e.g. Inter:400,500,600,700, Playfair_Display:700,900)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "usage",
+          "description": "How fonts are used",
+          "type": "string",
+          "required": false,
+          "default": "body-and-heading",
+          "enum": [
+            "body-and-heading",
+            "body-only",
+            "heading-only",
+            "monospace",
+            "display"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.implement_code_splitting",
+      "description": "Implement dynamic imports and code splitting to reduce initial bundle size, with loading states and SSR options.",
+      "category": "nextjs",
+      "tags": [
+        "performance",
+        "bundle",
+        "dynamic-import",
+        "code-splitting"
+      ],
+      "parameters": [
+        {
+          "name": "components",
+          "description": "Comma-separated component names to lazy load (e.g. RichEditor, ChartDashboard, MapView)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "strategy",
+          "description": "Loading strategy",
+          "type": "string",
+          "required": false,
+          "default": "on-interaction",
+          "enum": [
+            "on-interaction",
+            "on-viewport",
+            "immediately",
+            "on-route"
+          ]
+        },
+        {
+          "name": "ssr",
+          "description": "Enable server-side rendering for dynamic imports",
+          "type": "string",
+          "required": false,
+          "default": "false",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_metadata",
+      "description": "Generate Next.js generateMetadata() function and static metadata exports with Open Graph, Twitter cards, canonical URLs, and dynamic page data.",
+      "category": "nextjs",
+      "tags": [
+        "seo",
+        "metadata",
+        "opengraph",
+        "twitter-card",
+        "og"
+      ],
+      "parameters": [
+        {
+          "name": "page_name",
+          "description": "Page name (e.g. Product Detail, Blog Post, Home, About)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "description": "What this page shows — used for meta description",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "type",
+          "description": "Metadata type",
+          "type": "string",
+          "required": false,
+          "default": "dynamic",
+          "enum": [
+            "static",
+            "dynamic"
+          ]
+        },
+        {
+          "name": "site_name",
+          "description": "Website/brand name",
+          "type": "string",
+          "required": false,
+          "default": "My App"
+        },
+        {
+          "name": "og_image_route",
+          "description": "OG image route (e.g. /og, /api/og)",
+          "type": "string",
+          "required": false,
+          "default": "/og"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_og_image",
+      "description": "Generate a Next.js opengraph-image.tsx or dynamic OG image route using @vercel/og with customizable layout and branding.",
+      "category": "nextjs",
+      "tags": [
+        "og-image",
+        "social",
+        "seo",
+        "vercel-og",
+        "opengraph"
+      ],
+      "parameters": [
+        {
+          "name": "route",
+          "description": "Where to place the OG image (e.g. /og, /blog/[slug])",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "layout_description",
+          "description": "Description of the OG image design (e.g. gradient background with title and logo)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "type",
+          "description": "OG image type",
+          "type": "string",
+          "required": false,
+          "default": "api-route",
+          "enum": [
+            "api-route",
+            "file-convention"
+          ]
+        },
+        {
+          "name": "brand_color",
+          "description": "Primary brand color (hex, e.g. #7c3aed)",
+          "type": "string",
+          "required": false,
+          "default": "#000000"
+        }
+      ]
+    },
+    {
+      "name": "nextjs.generate_sitemap",
+      "description": "Generate sitemap.ts for static and dynamic routes, with proper changefreq, priority, and lastModified dates.",
+      "category": "nextjs",
+      "tags": [
+        "seo",
+        "sitemap",
+        "xml",
+        "static-generation"
+      ],
+      "parameters": [
+        {
+          "name": "static_routes",
+          "description": "Comma-separated static routes (e.g. /,/about,/pricing,/blog)",
+          "type": "string",
+          "required": false,
+          "default": "/,/about"
+        },
+        {
+          "name": "dynamic_entities",
+          "description": "Comma-separated dynamic entities to include (e.g. blog-posts,products,docs-pages)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "base_url_env",
+          "description": "Environment variable for base URL",
+          "type": "string",
+          "required": false,
+          "default": "NEXT_PUBLIC_BASE_URL"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_tailwind_config",
+      "description": "Generate a complete Tailwind CSS v4 configuration with custom design tokens, color palette, typography, spacing scale, and plugin setup.",
+      "category": "design",
+      "tags": [
+        "tailwind",
+        "config",
+        "design-tokens",
+        "theme"
+      ],
+      "parameters": [
+        {
+          "name": "brand_colors",
+          "description": "Brand colors as name:hex pairs (e.g. primary:#7c3aed,secondary:#0ea5e9)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "plugins",
+          "description": "Comma-separated Tailwind plugins: typography, forms, aspect-ratio, container-queries",
+          "type": "string",
+          "required": false,
+          "default": "typography"
+        },
+        {
+          "name": "dark_mode",
+          "description": "Dark mode strategy",
+          "type": "string",
+          "required": false,
+          "default": "class",
+          "enum": [
+            "class",
+            "media"
+          ]
+        },
+        {
+          "name": "fonts",
+          "description": "Custom font CSS variable names (e.g. --font-sans:Inter,--font-heading:Playfair)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "design.generate_design_tokens_css",
+      "description": "Generate CSS custom properties (design tokens) for light and dark themes compatible with shadcn/ui, Tailwind, and any component library.",
+      "category": "design",
+      "tags": [
+        "design-tokens",
+        "css-variables",
+        "dark-mode",
+        "theming",
+        "shadcn"
+      ],
+      "parameters": [
+        {
+          "name": "primary_hsl",
+          "description": "Primary color in HSL (e.g. 262 83% 58%)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "description": "Design style",
+          "type": "string",
+          "required": false,
+          "default": "modern",
+          "enum": [
+            "modern",
+            "minimal",
+            "bold",
+            "soft",
+            "corporate"
+          ]
+        },
+        {
+          "name": "border_radius",
+          "description": "Base border radius (e.g. 0.5rem, 0.75rem, 1rem)",
+          "type": "string",
+          "required": false,
+          "default": "0.5rem"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_responsive_layout",
+      "description": "Generate responsive Tailwind CSS layout components for common patterns like hero sections, feature grids, pricing tables, and dashboards.",
+      "category": "design",
+      "tags": [
+        "layout",
+        "responsive",
+        "tailwind",
+        "sections",
+        "ui"
+      ],
+      "parameters": [
+        {
+          "name": "pattern",
+          "description": "Layout pattern",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "hero",
+            "feature-grid",
+            "pricing-table",
+            "dashboard-shell",
+            "blog-layout",
+            "product-grid",
+            "testimonials",
+            "cta-section",
+            "stats-row",
+            "team-grid"
+          ]
+        },
+        {
+          "name": "content",
+          "description": "Content description (what goes in each section)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "columns",
+          "description": "Number of columns in grid patterns (2, 3, 4)",
+          "type": "string",
+          "required": false,
+          "default": "3"
+        }
+      ]
+    },
+    {
+      "name": "design.setup_shadcn",
+      "description": "Generate the complete shadcn/ui setup: initialization commands, components.json configuration, and base CSS variables.",
+      "category": "design",
+      "tags": [
+        "shadcn",
+        "setup",
+        "radix-ui",
+        "component-library"
+      ],
+      "parameters": [
+        {
+          "name": "style",
+          "description": "shadcn/ui style",
+          "type": "string",
+          "required": false,
+          "default": "default",
+          "enum": [
+            "default",
+            "new-york"
+          ]
+        },
+        {
+          "name": "base_color",
+          "description": "Base color theme",
+          "type": "string",
+          "required": false,
+          "default": "slate",
+          "enum": [
+            "slate",
+            "gray",
+            "zinc",
+            "neutral",
+            "stone"
+          ]
+        },
+        {
+          "name": "components",
+          "description": "Comma-separated initial components to add",
+          "type": "string",
+          "required": false,
+          "default": "button,card,input,form,dialog"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_data_table",
+      "description": "Generate a full-featured shadcn/ui DataTable with TanStack Table v8: sorting, filtering, pagination, row selection, and column visibility.",
+      "category": "design",
+      "tags": [
+        "data-table",
+        "tanstack-table",
+        "shadcn",
+        "sorting",
+        "pagination"
+      ],
+      "parameters": [
+        {
+          "name": "entity",
+          "description": "Entity name (e.g. user, product, order, invoice)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "columns",
+          "description": "Comma-separated columns with types (e.g. name:string, email:string, status:badge, amount:currency, createdAt:date)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: sorting, filtering, pagination, selection, column-visibility, export",
+          "type": "string",
+          "required": false,
+          "default": "sorting,filtering,pagination"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_dashboard",
+      "description": "Generate a complete admin dashboard layout with shadcn/ui Sidebar, stat cards, charts, recent activity, and responsive navigation.",
+      "category": "design",
+      "tags": [
+        "dashboard",
+        "shadcn",
+        "sidebar",
+        "admin",
+        "layout"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "nav_items",
+          "description": "Comma-separated navigation items (e.g. Dashboard,Users,Products,Orders,Settings)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "widgets",
+          "description": "Comma-separated widgets to include: stats-cards, line-chart, bar-chart, pie-chart, recent-table, activity-feed",
+          "type": "string",
+          "required": false,
+          "default": "stats-cards,line-chart,recent-table"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_color_palette",
+      "description": "Generate a complete, accessible color palette with light/dark variants, semantic colors, and CSS custom properties from a base brand color.",
+      "category": "design",
+      "tags": [
+        "colors",
+        "palette",
+        "design-tokens",
+        "accessibility",
+        "dark-mode"
+      ],
+      "parameters": [
+        {
+          "name": "brand_color",
+          "description": "Primary brand color in hex (e.g. #7c3aed)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "palette_name",
+          "description": "Name for the color scale (e.g. violet, ocean, forest)",
+          "type": "string",
+          "required": false,
+          "default": "primary"
+        },
+        {
+          "name": "style",
+          "description": "Color style",
+          "type": "string",
+          "required": false,
+          "default": "vibrant",
+          "enum": [
+            "vibrant",
+            "muted",
+            "pastel",
+            "deep",
+            "corporate"
+          ]
+        },
+        {
+          "name": "generate_semantic",
+          "description": "Generate semantic colors (success, warning, error, info)",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "design.implement_dark_mode",
+      "description": "Implement dark mode with ThemeProvider, system preference detection, persistent user preference, and smooth transitions.",
+      "category": "design",
+      "tags": [
+        "dark-mode",
+        "theme",
+        "next-themes",
+        "css-variables"
+      ],
+      "parameters": [
+        {
+          "name": "provider",
+          "description": "Theme provider library",
+          "type": "string",
+          "required": false,
+          "default": "next-themes",
+          "enum": [
+            "next-themes",
+            "custom"
+          ]
+        },
+        {
+          "name": "themes",
+          "description": "Available themes (comma-separated)",
+          "type": "string",
+          "required": false,
+          "default": "light,dark,system"
+        },
+        {
+          "name": "default_theme",
+          "description": "Default theme",
+          "type": "string",
+          "required": false,
+          "default": "system",
+          "enum": [
+            "light",
+            "dark",
+            "system"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "design.generate_type_scale",
+      "description": "Generate a harmonious typographic scale with fluid type sizes and proper line-heights.",
+      "category": "design",
+      "tags": [
+        "typography",
+        "type-scale",
+        "fluid-type",
+        "tailwind"
+      ],
+      "parameters": [
+        {
+          "name": "base_size",
+          "description": "Base font size in px",
+          "type": "string",
+          "required": false,
+          "default": "16"
+        },
+        {
+          "name": "scale_ratio",
+          "description": "Scale ratio (e.g. 1.25 Major Third, 1.333 Perfect Fourth)",
+          "type": "string",
+          "required": false,
+          "default": "1.25"
+        },
+        {
+          "name": "steps",
+          "description": "Number of scale steps above base (2-6)",
+          "type": "string",
+          "required": false,
+          "default": "5"
+        }
+      ]
+    },
+    {
+      "name": "design.setup_next_fonts",
+      "description": "Configure next/font/google with multiple font families, CSS variables, and Tailwind integration.",
+      "category": "design",
+      "tags": [
+        "fonts",
+        "next-font",
+        "google-fonts",
+        "performance",
+        "cls"
+      ],
+      "parameters": [
+        {
+          "name": "font_config",
+          "description": "Font config as name:weights:variable (e.g. Inter:400,500,600,700:--font-sans, Playfair_Display:700,900:--font-heading)",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "design.generate_design_system",
+      "description": "Generate a complete design system with tokens, component variants, and usage documentation — the foundation for a consistent UI.",
+      "category": "design",
+      "tags": [
+        "design-system",
+        "tokens",
+        "components",
+        "documentation"
+      ],
+      "parameters": [
+        {
+          "name": "brand_name",
+          "description": "Brand/product name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "primary_color",
+          "description": "Primary brand color hex",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "personality",
+          "description": "Brand personality",
+          "type": "string",
+          "required": false,
+          "default": "modern",
+          "enum": [
+            "modern",
+            "playful",
+            "corporate",
+            "minimal",
+            "bold"
+          ]
+        },
+        {
+          "name": "components",
+          "description": "Components to include (comma-separated)",
+          "type": "string",
+          "required": false,
+          "default": "button,card,input,badge,avatar"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_sidebar_layout",
+      "description": "Generate a responsive sidebar + main content layout with collapsible sidebar, breadcrumbs, and topbar.",
+      "category": "design",
+      "tags": [
+        "layout",
+        "sidebar",
+        "responsive",
+        "navigation",
+        "shadcn"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sidebar_width",
+          "description": "Sidebar width in pixels",
+          "type": "string",
+          "required": false,
+          "default": "256"
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: collapsible, breadcrumbs, user-menu, search, notifications",
+          "type": "string",
+          "required": false,
+          "default": "collapsible,breadcrumbs,user-menu"
+        }
+      ]
+    },
+    {
+      "name": "design.audit_accessibility",
+      "description": "Analyze a component for accessibility issues and generate a corrected version following WCAG 2.2 AA standards with ARIA, keyboard nav, and focus management.",
+      "category": "design",
+      "tags": [
+        "accessibility",
+        "a11y",
+        "wcag",
+        "aria",
+        "keyboard"
+      ],
+      "parameters": [
+        {
+          "name": "component_code",
+          "description": "The component code to audit (paste the TSX/JSX code)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "issues_to_fix",
+          "description": "Specific issues to address (comma-separated): aria-labels, focus-management, keyboard-nav, color-contrast, semantic-html, skip-links",
+          "type": "string",
+          "required": false,
+          "default": "aria-labels,keyboard-nav,semantic-html"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_skip_links",
+      "description": "Generate accessible skip navigation links for keyboard users.",
+      "category": "design",
+      "tags": [
+        "accessibility",
+        "skip-links",
+        "keyboard",
+        "navigation"
+      ],
+      "parameters": [
+        {
+          "name": "targets",
+          "description": "Comma-separated section IDs to skip to (e.g. main-content,navigation,footer)",
+          "type": "string",
+          "required": false,
+          "default": "main-content,navigation"
+        }
+      ]
+    },
+    {
+      "name": "design.implement_animations",
+      "description": "Generate animation components using Framer Motion for page transitions, scroll animations, gesture interactions, and micro-animations.",
+      "category": "design",
+      "tags": [
+        "animation",
+        "framer-motion",
+        "transitions",
+        "motion",
+        "ux"
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "description": "Animation type",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "page-transition",
+            "scroll-reveal",
+            "stagger-list",
+            "modal-enter",
+            "gesture-card",
+            "loading-skeleton",
+            "counter-up",
+            "parallax",
+            "magnetic-button",
+            "confetti"
+          ]
+        },
+        {
+          "name": "target",
+          "description": "Component or element to animate (e.g. ProductCard, PageWrapper, ListItem)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "reduced_motion",
+          "description": "Respect prefers-reduced-motion",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "design.generate_loading_ui",
+      "description": "Generate skeleton loading screens and loading state components that match specific UI patterns for better perceived performance.",
+      "category": "design",
+      "tags": [
+        "loading",
+        "skeleton",
+        "ux",
+        "performance",
+        "placeholder"
+      ],
+      "parameters": [
+        {
+          "name": "component",
+          "description": "Component to create a skeleton for (e.g. UserCard, ProductList, BlogPost, Dashboard)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "style",
+          "description": "Skeleton animation style",
+          "type": "string",
+          "required": false,
+          "default": "pulse",
+          "enum": [
+            "pulse",
+            "shimmer",
+            "wave",
+            "static"
+          ]
+        },
+        {
+          "name": "count",
+          "description": "Number of skeleton items to show",
+          "type": "string",
+          "required": false,
+          "default": "3"
+        }
+      ]
+    },
+    {
+      "name": "design.generate_component_variants",
+      "description": "Generate a component with CVA (class-variance-authority) variants for consistent, type-safe variant styling.",
+      "category": "design",
+      "tags": [
+        "variants",
+        "cva",
+        "design-system",
+        "tailwind",
+        "type-safe"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Component name (e.g. Button, Badge, Card, Alert)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "variants",
+          "description": "Variant groups as name:option1|option2 (e.g. variant:default|destructive|outline|ghost, size:sm|md|lg)",
+          "type": "string",
+          "required": false,
+          "default": "variant:default|secondary|outline|ghost,size:sm|md|lg"
+        },
+        {
+          "name": "base_element",
+          "description": "HTML base element",
+          "type": "string",
+          "required": false,
+          "default": "button",
+          "enum": [
+            "button",
+            "div",
+            "span",
+            "a",
+            "input"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_zustand_store",
+      "description": "Generate a Zustand store with TypeScript, devtools, persist middleware, and custom selectors for a specific application domain.",
+      "category": "frontend",
+      "tags": [
+        "state",
+        "zustand",
+        "store",
+        "client-state"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Store name (e.g. cart, auth, ui, editor, player)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "state_fields",
+          "description": "Comma-separated state fields with types (e.g. items:CartItem[],total:number,isOpen:boolean)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "actions",
+          "description": "Comma-separated action names (e.g. addItem,removeItem,clearCart,toggleOpen)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "persist",
+          "description": "Persist state to localStorage",
+          "type": "string",
+          "required": false,
+          "default": "false",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_jotai_atoms",
+      "description": "Generate Jotai atoms for atomic state management with derived atoms, async atoms, and atom families for entity collections.",
+      "category": "frontend",
+      "tags": [
+        "state",
+        "jotai",
+        "atoms",
+        "atomic-state"
+      ],
+      "parameters": [
+        {
+          "name": "domain",
+          "description": "State domain (e.g. todos, filters, user, theme, cart)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "atoms",
+          "description": "Comma-separated atom definitions (e.g. selectedId:string|null, filter:active|all|done, showModal:boolean)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "derived",
+          "description": "Comma-separated derived atom descriptions (e.g. filteredItems:filter todos by current filter)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_ui_store",
+      "description": "Generate a UI state store for modals, drawers, toast queues, loading indicators, and global UI state with Zustand.",
+      "category": "frontend",
+      "tags": [
+        "state",
+        "zustand",
+        "ui-state",
+        "modals",
+        "toasts"
+      ],
+      "parameters": [
+        {
+          "name": "features",
+          "description": "Comma-separated UI features to manage: modals, drawers, toasts, loading, sidebar, command-palette",
+          "type": "string",
+          "required": false,
+          "default": "modals,drawers,toasts,loading"
+        }
+      ]
+    },
+    {
+      "name": "frontend.generate_zod_schema",
+      "description": "Generate a comprehensive Zod schema with custom validators, refinements, transformations, and TypeScript inference types.",
+      "category": "frontend",
+      "tags": [
+        "zod",
+        "validation",
+        "schema",
+        "typescript"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Schema name (e.g. LoginSchema, CreateProductSchema, ProfileSchema)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions (e.g. email:email, password:min8, name:min2|max50, age:number|min18, role:enum:admin|user|guest)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "purpose",
+          "description": "What this schema validates (e.g. user login, product creation, profile update)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "frontend.generate_multi_step_form",
+      "description": "Generate a multi-step wizard form with progress indicator, step validation, navigation, and final submission.",
+      "category": "frontend",
+      "tags": [
+        "form",
+        "multi-step",
+        "wizard",
+        "react-hook-form",
+        "zod"
+      ],
+      "parameters": [
+        {
+          "name": "name",
+          "description": "Form name (e.g. OnboardingWizard, CheckoutForm, RegistrationFlow)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "steps",
+          "description": "Comma-separated step definitions (e.g. Personal Info:name|email, Account:username|password, Preferences:role|newsletter)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "on_complete",
+          "description": "What happens on final submit (e.g. create account, place order)",
+          "type": "string",
+          "required": false,
+          "default": "submit form data"
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_tanstack_query",
+      "description": "Generate TanStack Query v5 setup with QueryClient, typed hooks, mutations, optimistic updates, and infinite scroll.",
+      "category": "frontend",
+      "tags": [
+        "tanstack-query",
+        "react-query",
+        "data-fetching",
+        "cache",
+        "mutations"
+      ],
+      "parameters": [
+        {
+          "name": "entity",
+          "description": "Entity to query (e.g. products, users, posts, orders)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "api_base",
+          "description": "API base path (e.g. /api/products, /api/users)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "hooks",
+          "description": "Hooks to generate: list,detail,create,update,delete,infinite",
+          "type": "string",
+          "required": false,
+          "default": "list,detail,create,delete"
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_virtualization",
+      "description": "Implement list virtualization with TanStack Virtual for rendering large datasets efficiently.",
+      "category": "frontend",
+      "tags": [
+        "performance",
+        "virtualization",
+        "tanstack-virtual",
+        "large-lists"
+      ],
+      "parameters": [
+        {
+          "name": "component_name",
+          "description": "Component name (e.g. VirtualProductList, InfiniteMessageList)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "item_height",
+          "description": "Approximate item height in pixels",
+          "type": "string",
+          "required": false,
+          "default": "80"
+        },
+        {
+          "name": "direction",
+          "description": "Scroll direction",
+          "type": "string",
+          "required": false,
+          "default": "vertical",
+          "enum": [
+            "vertical",
+            "horizontal"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_memoization",
+      "description": "Analyze and apply React memoization (memo, useMemo, useCallback) to prevent unnecessary re-renders.",
+      "category": "frontend",
+      "tags": [
+        "performance",
+        "memoization",
+        "react.memo",
+        "useMemo",
+        "useCallback"
+      ],
+      "parameters": [
+        {
+          "name": "component_code",
+          "description": "Component code to analyze and optimize",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "optimization_goal",
+          "description": "What to optimize (e.g. expensive calculation, child re-renders, event handlers)",
+          "type": "string",
+          "required": false,
+          "default": "prevent re-renders"
+        }
+      ]
+    },
+    {
+      "name": "frontend.generate_component_tests",
+      "description": "Generate Vitest + Testing Library tests for a React component covering rendering, interactions, accessibility, and edge cases.",
+      "category": "frontend",
+      "tags": [
+        "testing",
+        "vitest",
+        "testing-library",
+        "unit-tests"
+      ],
+      "parameters": [
+        {
+          "name": "component_name",
+          "description": "Component to test",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "component_code",
+          "description": "The component source code",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "test_cases",
+          "description": "Comma-separated test scenarios: render, interactions, accessibility, error-states, async, snapshots",
+          "type": "string",
+          "required": false,
+          "default": "render,interactions,accessibility"
+        }
+      ]
+    },
+    {
+      "name": "frontend.generate_e2e_tests",
+      "description": "Generate Playwright end-to-end tests for a feature flow with page objects, selectors, and CI configuration.",
+      "category": "frontend",
+      "tags": [
+        "testing",
+        "playwright",
+        "e2e",
+        "integration"
+      ],
+      "parameters": [
+        {
+          "name": "feature",
+          "description": "Feature to test (e.g. user authentication, checkout flow, product CRUD)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "steps",
+          "description": "Comma-separated test steps (e.g. go to login|fill email|submit|verify redirect)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "base_url",
+          "description": "Base URL to test against",
+          "type": "string",
+          "required": false,
+          "default": "http://localhost:3000"
+        }
+      ]
+    },
+    {
+      "name": "frontend.setup_i18n",
+      "description": "Set up next-intl for internationalization with locale routing, message files, and type-safe translations.",
+      "category": "frontend",
+      "tags": [
+        "i18n",
+        "next-intl",
+        "localization",
+        "translations"
+      ],
+      "parameters": [
+        {
+          "name": "locales",
+          "description": "Comma-separated locales (e.g. en,pt-BR,es,fr)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "default_locale",
+          "description": "Default locale (e.g. en)",
+          "type": "string",
+          "required": false,
+          "default": "en"
+        },
+        {
+          "name": "namespaces",
+          "description": "Translation namespaces (e.g. common,auth,dashboard)",
+          "type": "string",
+          "required": false,
+          "default": "common"
+        }
+      ]
+    },
+    {
+      "name": "frontend.setup_sentry",
+      "description": "Set up Sentry error monitoring for Next.js with source maps, user context, and custom error boundaries.",
+      "category": "frontend",
+      "tags": [
+        "sentry",
+        "monitoring",
+        "error-tracking",
+        "observability"
+      ],
+      "parameters": [
+        {
+          "name": "dsn_env",
+          "description": "Environment variable name for DSN",
+          "type": "string",
+          "required": false,
+          "default": "NEXT_PUBLIC_SENTRY_DSN"
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: replay, profiling, tracing, user-context",
+          "type": "string",
+          "required": false,
+          "default": "replay,tracing"
+        }
+      ]
+    },
+    {
+      "name": "frontend.implement_toast_system",
+      "description": "Set up a toast notification system with Sonner including success, error, loading, and custom toasts.",
+      "category": "frontend",
+      "tags": [
+        "toast",
+        "notifications",
+        "sonner",
+        "ux",
+        "feedback"
+      ],
+      "parameters": [
+        {
+          "name": "theme",
+          "description": "Toast theme",
+          "type": "string",
+          "required": false,
+          "default": "system",
+          "enum": [
+            "light",
+            "dark",
+            "system"
+          ]
+        },
+        {
+          "name": "position",
+          "description": "Toast position",
+          "type": "string",
+          "required": false,
+          "default": "bottom-right",
+          "enum": [
+            "top-left",
+            "top-center",
+            "top-right",
+            "bottom-left",
+            "bottom-center",
+            "bottom-right"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vercel.generate_config",
+      "description": "Generate vercel.ts configuration with rewrites, redirects, headers, crons, and caching.",
+      "category": "vercel",
+      "tags": [
+        "vercel",
+        "deployment",
+        "config",
+        "caching",
+        "rewrites"
+      ],
+      "parameters": [
+        {
+          "name": "framework",
+          "description": "Framework being deployed",
+          "type": "string",
+          "required": false,
+          "default": "nextjs",
+          "enum": [
+            "nextjs",
+            "astro",
+            "sveltekit",
+            "nuxt",
+            "remix"
+          ]
+        },
+        {
+          "name": "features",
+          "description": "Comma-separated features: rewrites, redirects, security-headers, crons, regions",
+          "type": "string",
+          "required": false,
+          "default": "security-headers"
+        },
+        {
+          "name": "regions",
+          "description": "Deployment regions (comma-separated)",
+          "type": "string",
+          "required": false,
+          "default": "iad1"
+        }
+      ]
+    },
+    {
+      "name": "vercel.deployment_checklist",
+      "description": "Generate a comprehensive pre-deployment checklist for Next.js apps on Vercel.",
+      "category": "vercel",
+      "tags": [
+        "deployment",
+        "checklist",
+        "production",
+        "quality"
+      ],
+      "parameters": [
+        {
+          "name": "app_type",
+          "description": "Application type (e.g. SaaS, e-commerce, blog, marketing)",
+          "type": "string",
+          "required": false,
+          "default": "SaaS"
+        },
+        {
+          "name": "has_database",
+          "description": "Does the app use a database?",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false"
+          ]
+        },
+        {
+          "name": "has_auth",
+          "description": "Does the app use authentication?",
+          "type": "string",
+          "required": false,
+          "default": "true",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vercel.generate_env_validation",
+      "description": "Generate environment variable validation with Zod that fails at startup if required vars are missing.",
+      "category": "vercel",
+      "tags": [
+        "environment",
+        "env-vars",
+        "validation",
+        "zod",
+        "type-safe"
+      ],
+      "parameters": [
+        {
+          "name": "server_vars",
+          "description": "Comma-separated server-only env vars with types (e.g. DATABASE_URL:url, AUTH_SECRET:string, STRIPE_KEY:string)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "public_vars",
+          "description": "Comma-separated public env vars (NEXT_PUBLIC_*) (e.g. NEXT_PUBLIC_BASE_URL:url, NEXT_PUBLIC_ANALYTICS_ID:string)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "vercel.implement_feature_flags",
+      "description": "Implement feature flags using Vercel Edge Config for instant rollouts without redeployment.",
+      "category": "vercel",
+      "tags": [
+        "feature-flags",
+        "edge-config",
+        "rollout",
+        "a-b-testing",
+        "vercel"
+      ],
+      "parameters": [
+        {
+          "name": "flags",
+          "description": "Comma-separated feature flag names (e.g. new-checkout, ai-assistant, dark-mode-v2)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "flag_type",
+          "description": "Flag type",
+          "type": "string",
+          "required": false,
+          "default": "boolean",
+          "enum": [
+            "boolean",
+            "percentage",
+            "user-segment"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vercel.setup_analytics",
+      "description": "Set up Vercel Analytics and Speed Insights with custom event tracking.",
+      "category": "vercel",
+      "tags": [
+        "analytics",
+        "speed-insights",
+        "web-vitals",
+        "vercel",
+        "monitoring"
+      ],
+      "parameters": [
+        {
+          "name": "features",
+          "description": "Comma-separated features to enable: analytics, speed-insights, custom-events",
+          "type": "string",
+          "required": false,
+          "default": "analytics,speed-insights"
+        },
+        {
+          "name": "custom_events",
+          "description": "Comma-separated custom events to track (e.g. signup,purchase,download)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "backend.fastapi_endpoint",
+      "description": "Generate a FastAPI router with full CRUD endpoints, Pydantic request/response schemas, dependency injection stubs, and OpenAPI documentation annotations.",
+      "category": "backend",
+      "tags": [
+        "fastapi",
+        "endpoint",
+        "router",
+        "pydantic",
+        "crud",
+        "rest",
+        "api"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "operations",
+          "description": "Comma-separated CRUD operations to generate",
+          "type": "string",
+          "required": false,
+          "default": "create,read,update,delete,list"
+        },
+        {
+          "name": "auth",
+          "description": "Authentication dependency to inject (e.g. oauth2_scheme, api_key, none)",
+          "type": "string",
+          "required": false,
+          "default": "none"
+        },
+        {
+          "name": "prefix",
+          "description": "URL prefix for the router (e.g. /api/v1)",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "backend.sqlalchemy_model",
+      "description": "Generate an async SQLAlchemy 2.0 ORM model with mapped columns, relationships, Alembic-ready table definition, and a matching async database session factory.",
+      "category": "backend",
+      "tags": [
+        "sqlalchemy",
+        "orm",
+        "database",
+        "model",
+        "async",
+        "alembic",
+        "migration"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated fields with optional type annotation (e.g. name:str, price:float, is_active:bool)",
+          "type": "string",
+          "required": false,
+          "default": "name:str"
+        },
+        {
+          "name": "relationships",
+          "description": "Comma-separated relationships (e.g. orders:Order:one-to-many, user:User:many-to-one)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "soft_delete",
+          "description": "Include soft-delete support (deleted_at column)",
+          "type": "string",
+          "required": false,
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "name": "backend.repository_pattern",
+      "description": "Generate an abstract repository interface and its async SQLAlchemy implementation following the Repository pattern for clean separation between domain and persistence.",
+      "category": "backend",
+      "tags": [
+        "repository",
+        "design-pattern",
+        "domain",
+        "persistence",
+        "sqlalchemy",
+        "clean-architecture"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "operations",
+          "description": "Comma-separated operations to include",
+          "type": "string",
+          "required": false,
+          "default": "get_by_id,get_all,create,update,delete"
+        },
+        {
+          "name": "extra_queries",
+          "description": "Comma-separated extra query methods (e.g. get_by_email, get_active, find_by_name)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "backend.design_patterns",
+      "description": "Generate Python implementations of backend design patterns: Factory, Strategy, Observer, Command, CQRS, Unit of Work, Event Bus, and Saga. Each output is production-ready async Python.",
+      "category": "backend",
+      "tags": [
+        "design-pattern",
+        "factory",
+        "strategy",
+        "observer",
+        "cqrs",
+        "command",
+        "saga",
+        "clean-architecture"
+      ],
+      "parameters": [
+        {
+          "name": "pattern",
+          "description": "Pattern to generate",
+          "type": "string",
+          "required": true,
+          "enum": [
+            "factory",
+            "strategy",
+            "observer",
+            "command",
+            "cqrs",
+            "unit_of_work",
+            "event_bus",
+            "saga"
+          ]
+        },
+        {
+          "name": "context",
+          "description": "Domain context name to personalise the pattern (e.g. Order, Payment, User)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "backend.docker_setup",
+      "description": "Generate a production-ready multi-stage Dockerfile and docker-compose.yml for a FastAPI application with optional database, Redis, and monitoring services.",
+      "category": "backend",
+      "tags": [
+        "docker",
+        "dockerfile",
+        "docker-compose",
+        "deployment",
+        "devops",
+        "container"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name used in image tags and service names",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "python_version",
+          "description": "Python version for the base image",
+          "type": "string",
+          "required": false,
+          "default": "3.12"
+        },
+        {
+          "name": "services",
+          "description": "Comma-separated additional services (postgres, redis, celery, prometheus, grafana)",
+          "type": "string",
+          "required": false,
+          "default": "postgres"
+        },
+        {
+          "name": "port",
+          "description": "Port the FastAPI app listens on",
+          "type": "string",
+          "required": false,
+          "default": "8000"
+        }
+      ]
+    },
+    {
+      "name": "backend.pytest_suite",
+      "description": "Generate a pytest test suite with async fixtures, TestClient integration tests, repository unit tests, and factory_boy factories for a FastAPI/SQLAlchemy resource.",
+      "category": "backend",
+      "tags": [
+        "pytest",
+        "testing",
+        "test",
+        "integration-test",
+        "fixtures",
+        "factory-boy",
+        "fastapi"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "operations",
+          "description": "Comma-separated CRUD operations to test",
+          "type": "string",
+          "required": false,
+          "default": "create,read,update,delete,list"
+        },
+        {
+          "name": "with_auth",
+          "description": "Include authentication header in requests (true/false)",
+          "type": "string",
+          "required": false,
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "name": "go.setup_project",
+      "description": "Generate Go 1.24 project scaffold: go.mod, main.go, folder structure (cmd/, internal/, pkg/), and dependency injection bootstrap.",
+      "category": "go",
+      "tags": [
+        "go",
+        "setup",
+        "scaffold",
+        "project",
+        "module",
+        "bootstrap"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "app_name",
+          "description": "Application name used for the binary and package names",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "framework",
+          "description": "HTTP framework to use",
+          "type": "string",
+          "required": false,
+          "default": "fiber",
+          "enum": [
+            "fiber",
+            "gin",
+            "gorilla",
+            "echo",
+            "chi"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "go.fiber_full_project",
+      "description": "Generate a complete Fiber v2 + GORM + PostgreSQL + Swagger project scaffold following the Medical-App-Core pattern: go.mod with production dependencies, cmd/main.go with centralised initializer sequence (godotenv → InitialDB → RunMigrations → InitServices → Fiber → Swagger → routes → Listen), .env.example, and Makefile. Use go.initializers to generate the initializers/ package afterwards.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "gorm",
+        "postgres",
+        "swagger",
+        "scaffold",
+        "template",
+        "full-stack",
+        "bootstrap",
+        "godotenv",
+        "jwt"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/medical-api)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "app_name",
+          "description": "Application name (used in Fiber config and Swagger title)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "resource",
+          "description": "Primary resource name to wire in initializeRoutes (e.g. bank, patient, user). Used to generate the controller instantiation and route group.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "port",
+          "description": "Default HTTP port",
+          "type": "string",
+          "required": false,
+          "default": "3040"
+        },
+        {
+          "name": "go_version",
+          "description": "Go toolchain version",
+          "type": "string",
+          "required": false,
+          "default": "1.26"
+        }
+      ]
+    },
+    {
+      "name": "go.go_struct",
+      "description": "Generate Go domain structs and request/response DTOs with json, validate, and db struct tags.",
+      "category": "go",
+      "tags": [
+        "go",
+        "struct",
+        "domain",
+        "dto",
+        "model",
+        "pydantic",
+        "schema"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions as name:type (e.g. name:string,email:string,age:int)",
+          "type": "string",
+          "required": false,
+          "default": "name:string,description:string"
+        },
+        {
+          "name": "package_name",
+          "description": "Go package name",
+          "type": "string",
+          "required": false,
+          "default": "domain"
+        }
+      ]
+    },
+    {
+      "name": "go.repository",
+      "description": "Generate a Go repository interface and PostgreSQL implementation using pgx/v5. Framework-agnostic — pure domain layer.",
+      "category": "go",
+      "tags": [
+        "go",
+        "repository",
+        "postgres",
+        "pgx",
+        "database",
+        "ddd",
+        "pattern"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "go.service",
+      "description": "Generate a Go service layer with business logic injected via the repository interface.",
+      "category": "go",
+      "tags": [
+        "go",
+        "service",
+        "business-logic",
+        "use-case",
+        "domain",
+        "ddd"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.docker_setup",
+      "description": "Generate a multi-stage Dockerfile (builder → distroless) and docker-compose.yml for the Go service with PostgreSQL and Redis.",
+      "category": "go",
+      "tags": [
+        "go",
+        "docker",
+        "dockerfile",
+        "docker-compose",
+        "postgres",
+        "redis",
+        "devops"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application binary name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "services",
+          "description": "Comma-separated extra services to include (postgres,redis)",
+          "type": "string",
+          "required": false,
+          "default": "postgres"
+        },
+        {
+          "name": "port",
+          "description": "Port the application listens on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        }
+      ]
+    },
+    {
+      "name": "go.test_suite",
+      "description": "Generate Go unit tests with testify/suite and table-driven patterns, plus mockery-generated mocks for the repository interface.",
+      "category": "go",
+      "tags": [
+        "go",
+        "test",
+        "testify",
+        "mockery",
+        "unit-test",
+        "tdd",
+        "suite"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.generate_migration",
+      "description": "Generate SQL migration files (up/down) compatible with golang-migrate/migrate/v4.",
+      "category": "go",
+      "tags": [
+        "go",
+        "migration",
+        "sql",
+        "postgres",
+        "golang-migrate",
+        "database"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. user, product, order)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions as name:type",
+          "type": "string",
+          "required": false,
+          "default": "name:varchar(255),description:text"
+        },
+        {
+          "name": "version",
+          "description": "Migration version prefix (e.g. 000001)",
+          "type": "string",
+          "required": false,
+          "default": "000001"
+        }
+      ]
+    },
+    {
+      "name": "go.config",
+      "description": "Generate a Go config struct with viper loader for environment variables and YAML files, with validation.",
+      "category": "go",
+      "tags": [
+        "go",
+        "config",
+        "viper",
+        "env",
+        "yaml",
+        "settings"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name used for env var prefix",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.logger",
+      "description": "Generate structured logging setup with uber-go/zap and request-scoped log fields.",
+      "category": "go",
+      "tags": [
+        "go",
+        "logger",
+        "zap",
+        "logging",
+        "observability",
+        "structured"
+      ],
+      "parameters": [
+        {
+          "name": "log_level",
+          "description": "Default log level (debug, info, warn, error)",
+          "type": "string",
+          "required": false,
+          "default": "info"
+        }
+      ]
+    },
+    {
+      "name": "go.initializers",
+      "description": "Generate the centralised initializers/ package for a Fiber v2 + GORM + PostgreSQL project: database.go (GORM connection with pooling), services.go (Services DI container + InitServices), migrations.go (UUID-ossp extension + AutoMigrate), validators.go (custom field validators). Follows the Medical-App-Core pattern of centralised service initialisation.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "gorm",
+        "initializers",
+        "bootstrap",
+        "di",
+        "dependency-injection",
+        "postgres",
+        "services",
+        "migrations"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "resources",
+          "description": "Comma-separated resource names to wire in Services struct (e.g. patient,user,appointment). Leave empty to generate a minimal stub.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        },
+        {
+          "name": "app_name",
+          "description": "Application name for comments and logs",
+          "type": "string",
+          "required": false,
+          "default": "app"
+        }
+      ]
+    },
+    {
+      "name": "go.gorm_entity",
+      "description": "Generate a GORM entity (UUID primary key, timestamps, gorm tags), a service contract interface, and DTOs (InputDTO + DTO) following the Medical-App-Core layered pattern. Produces: domain/entities/{resource}.go, services/contracts/{resource}ContractService.go, domain/dtos/{resource}DTO.go.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorm",
+        "entity",
+        "model",
+        "uuid",
+        "postgres",
+        "dto",
+        "contract",
+        "service",
+        "ddd",
+        "domain"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. patient, user, appointment)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions as name:type (e.g. name:string,email:string,age:int,active:bool). Supported types: string, int, int64, float64, bool, time, uuid.",
+          "type": "string",
+          "required": false,
+          "default": "name:string,description:string"
+        },
+        {
+          "name": "has_organization",
+          "description": "Add OrganizationID foreign key (true/false)",
+          "type": "string",
+          "required": false,
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "name": "go.swagger_fiber",
+      "description": "Generate Swagger/OpenAPI integration for Fiber v2: annotated controller template showing @Summary/@Param/@Success/@Security, Swagger UI route secured with HTTP basic auth (SWAGGER_USER / SWAGGER_PASSWORD env vars), and docs/docs.go bootstrap. Requires `swag init` to regenerate after annotation changes.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "swagger",
+        "openapi",
+        "docs",
+        "basicauth",
+        "swaggo",
+        "api-docs",
+        "security"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "app_name",
+          "description": "API title shown in Swagger UI",
+          "type": "string",
+          "required": false,
+          "default": "My API"
+        },
+        {
+          "name": "host",
+          "description": "API host (e.g. localhost:3040)",
+          "type": "string",
+          "required": false,
+          "default": "localhost:3040"
+        },
+        {
+          "name": "resource",
+          "description": "Example resource name to generate an annotated controller (e.g. patient, user)",
+          "type": "string",
+          "required": false,
+          "default": "resource"
+        }
+      ]
+    },
+    {
+      "name": "go.repository_contract",
+      "description": "Generate domain/repositories/contracts/{resource}Repository.go — the repository interface that lives inside the domain layer following the Medical-App-Core pattern. Declares Create, GetByID, GetAll, GetByName, Update, and Delete operations against the GORM entity.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorm",
+        "repository",
+        "contract",
+        "interface",
+        "domain",
+        "ddd",
+        "medical-app-core"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. patient, account, user)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "go.repository_impl",
+      "description": "Generate infra/repositories/{resource}Repository.go — GORM implementation of the domain repository contract following the Medical-App-Core pattern. Struct receives *gorm.DB, implements Create, GetByID, GetAll, GetByName, Update, and Delete using GORM ORM methods.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorm",
+        "repository",
+        "implementation",
+        "infra",
+        "postgres",
+        "medical-app-core"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. patient, account, user)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "go.service_impl",
+      "description": "Generate services/implementations/{resource}Service.go — concrete service implementation following the Medical-App-Core pattern. Struct receives *gorm.DB, uses safeDB() session, raw SQL with soft-delete awareness, and toDTOList() converter. Implements the {resource}ServiceContract interface.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorm",
+        "service",
+        "implementation",
+        "business-logic",
+        "medical-app-core",
+        "dto",
+        "soft-delete"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. patient, account, user)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "fields",
+          "description": "Comma-separated field definitions as name:type (e.g. name:string,email:string,balance:float64). Must match the fields used in go.gorm_entity for this resource.",
+          "type": "string",
+          "required": false,
+          "default": "name:string,description:string"
+        }
+      ]
+    },
+    {
+      "name": "go.controller",
+      "description": "Generate controllers/{resource}Controller.go — Fiber v2 HTTP controller following the Medical-App-Core pattern. Struct depends on the ServiceContract interface. Includes Create, GetAll, GetByID, Update, Delete handlers with full Swagger annotations (@Summary, @Tags, @Accept, @Produce, @Param, @Success, @Failure, @Router, @Security BearerAuth).",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "controller",
+        "handler",
+        "http",
+        "swagger",
+        "crud",
+        "medical-app-core",
+        "rest"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form (e.g. patient, account, user)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name (e.g. github.com/org/my-service)",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "go.fiber_app",
+      "description": "Generate Fiber v2 app initialization with global middleware: CORS, logger, recover, and rate limiter.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "app",
+        "middleware",
+        "cors",
+        "http",
+        "framework"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.fiber_handler",
+      "description": "Generate full CRUD Fiber v2 handler using fiber.Ctx with request parsing and validation.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "handler",
+        "crud",
+        "rest",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.fiber_routes",
+      "description": "Generate Fiber v2 route registration with groups and API versioning (/api/v1/).",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "routes",
+        "router",
+        "versioning",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        },
+        {
+          "name": "prefix",
+          "description": "API prefix",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "go.fiber_middleware",
+      "description": "Generate Fiber v2 custom middleware: JWT auth, API key, request ID, and timeout.",
+      "category": "go",
+      "tags": [
+        "go",
+        "fiber",
+        "middleware",
+        "jwt",
+        "auth",
+        "security",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gin_app",
+      "description": "Generate Gin engine setup with global middleware chain (CORS, recovery, logger).",
+      "category": "go",
+      "tags": [
+        "go",
+        "gin",
+        "app",
+        "middleware",
+        "cors",
+        "http",
+        "framework"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gin_handler",
+      "description": "Generate CRUD handlers using *gin.Context with automatic binding and validation.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gin",
+        "handler",
+        "crud",
+        "rest",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gin_routes",
+      "description": "Generate Gin route groups with versioning and CRUD registration.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gin",
+        "routes",
+        "router",
+        "versioning",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        },
+        {
+          "name": "prefix",
+          "description": "API prefix",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "go.gin_middleware",
+      "description": "Generate Gin middleware: JWT auth, CORS, request logging, and rate limit.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gin",
+        "middleware",
+        "jwt",
+        "auth",
+        "cors",
+        "security"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gorilla_app",
+      "description": "Generate gorilla/mux router setup with middleware chain and graceful shutdown.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorilla",
+        "mux",
+        "app",
+        "middleware",
+        "http",
+        "framework"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gorilla_handler",
+      "description": "Generate CRUD handlers using http.HandlerFunc and gorilla/mux path variables.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorilla",
+        "handler",
+        "crud",
+        "rest",
+        "http",
+        "handlerfunc"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.gorilla_routes",
+      "description": "Generate gorilla/mux subrouter registration with path prefix and method constraints.",
+      "category": "go",
+      "tags": [
+        "go",
+        "gorilla",
+        "routes",
+        "subrouter",
+        "mux",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        },
+        {
+          "name": "prefix",
+          "description": "API prefix",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "go.echo_app",
+      "description": "Generate Echo v4 instance setup with binder, validator, and custom error handler.",
+      "category": "go",
+      "tags": [
+        "go",
+        "echo",
+        "app",
+        "middleware",
+        "validator",
+        "http",
+        "framework"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.echo_handler",
+      "description": "Generate CRUD handlers using echo.Context with automatic binding and validation.",
+      "category": "go",
+      "tags": [
+        "go",
+        "echo",
+        "handler",
+        "crud",
+        "rest",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.echo_routes",
+      "description": "Generate Echo v4 route group registration with versioning.",
+      "category": "go",
+      "tags": [
+        "go",
+        "echo",
+        "routes",
+        "group",
+        "versioning",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        },
+        {
+          "name": "prefix",
+          "description": "API prefix",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "go.echo_middleware",
+      "description": "Generate Echo v4 middleware: JWT auth, request logger, and timeout.",
+      "category": "go",
+      "tags": [
+        "go",
+        "echo",
+        "middleware",
+        "jwt",
+        "auth",
+        "timeout",
+        "security"
+      ],
+      "parameters": [
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.chi_app",
+      "description": "Generate Chi v5 router setup with middleware stack and graceful shutdown.",
+      "category": "go",
+      "tags": [
+        "go",
+        "chi",
+        "app",
+        "middleware",
+        "http",
+        "framework",
+        "router"
+      ],
+      "parameters": [
+        {
+          "name": "app_name",
+          "description": "Application name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on",
+          "type": "string",
+          "required": false,
+          "default": "8080"
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.chi_handler",
+      "description": "Generate CRUD handlers using http.ResponseWriter + *http.Request with chi.URLParam.",
+      "category": "go",
+      "tags": [
+        "go",
+        "chi",
+        "handler",
+        "crud",
+        "rest",
+        "http",
+        "urlparam"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        }
+      ]
+    },
+    {
+      "name": "go.chi_routes",
+      "description": "Generate Chi v5 route mounting with subrouters and middleware scoping.",
+      "category": "go",
+      "tags": [
+        "go",
+        "chi",
+        "routes",
+        "subrouter",
+        "mount",
+        "middleware",
+        "http"
+      ],
+      "parameters": [
+        {
+          "name": "resource",
+          "description": "Resource name in singular form",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name",
+          "type": "string",
+          "required": false,
+          "default": "github.com/org/app"
+        },
+        {
+          "name": "prefix",
+          "description": "API prefix",
+          "type": "string",
+          "required": false,
+          "default": "/api/v1"
+        }
+      ]
+    },
+    {
+      "name": "diagnostic.go_diagnose",
+      "description": "Analyze Go compile/build errors and return fixed source files. Receives the full `go build` stderr output and the content of affected files. Uses LLM to identify root causes and generate complete corrected files. Falls back to a structured analysis report when LLM is unavailable.",
+      "category": "diagnostic",
+      "tags": [
+        "go",
+        "diagnostic",
+        "fix",
+        "debug",
+        "compile",
+        "build",
+        "error"
+      ],
+      "parameters": [
+        {
+          "name": "error_output",
+          "description": "Full output from `go build ./...` or `go run`",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source_files",
+          "description": "JSON array of affected files: [{\"path\": \"...\", \"content\": \"...\"}]. Include all files mentioned in the error output.",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "module_name",
+          "description": "Go module name from go.mod (e.g. github.com/org/service)",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "diagnostic.nextjs_diagnose",
+      "description": "Analyze Next.js/TypeScript build errors and return fixed source files. Receives the full `next build` or `tsc --noEmit` stderr output and the content of affected files. Uses LLM to identify root causes and generate complete corrected files. Falls back to a structured analysis report when LLM is unavailable.",
+      "category": "diagnostic",
+      "tags": [
+        "nextjs",
+        "typescript",
+        "diagnostic",
+        "fix",
+        "debug",
+        "build",
+        "error",
+        "react"
+      ],
+      "parameters": [
+        {
+          "name": "error_output",
+          "description": "Full output from `next build` or `npx tsc --noEmit`",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source_files",
+          "description": "JSON array of affected files: [{\"path\": \"...\", \"content\": \"...\"}]. Include all .tsx/.ts files mentioned in the error output.",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "next_version",
+          "description": "Next.js major version (e.g. 15, 14)",
+          "type": "string",
+          "required": false,
+          "default": "15"
+        }
+      ]
+    },
+    {
+      "name": "diagnostic.python_diagnose",
+      "description": "Analyze Python runtime errors, tracebacks, and import failures, then return fixed source files. Receives the full stderr/traceback output and the content of affected files. Uses LLM to identify root causes and generate complete corrected files. Falls back to a structured analysis report when LLM is unavailable.",
+      "category": "diagnostic",
+      "tags": [
+        "python",
+        "diagnostic",
+        "fix",
+        "debug",
+        "runtime",
+        "traceback",
+        "error",
+        "fastapi"
+      ],
+      "parameters": [
+        {
+          "name": "error_output",
+          "description": "Full Python traceback or stderr output (e.g. from `python app.py` or `uvicorn main:app`)",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "source_files",
+          "description": "JSON array of affected files: [{\"path\": \"...\", \"content\": \"...\"}]. Include all .py files referenced in the traceback.",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "python_version",
+          "description": "Python major.minor version (e.g. 3.12)",
+          "type": "string",
+          "required": false,
+          "default": "3.12"
+        }
+      ]
+    },
+    {
+      "name": "solid.srp_analyze",
+      "description": "Analyzes an architecture design for Single Responsibility Principle (SRP) compliance. Flags components, modules, or services that carry more than one primary responsibility.",
+      "category": "solid",
+      "tags": [
+        "solid",
+        "srp",
+        "single-responsibility",
+        "architecture",
+        "design-quality"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict containing components, modules, and metadata.",
+          "type": "object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "solid.ocp_analyze",
+      "description": "Analyzes an architecture design for Open/Closed Principle (OCP) compliance. Identifies missing extension points and components that are closed to extension without modification.",
+      "category": "solid",
+      "tags": [
+        "solid",
+        "ocp",
+        "open-closed",
+        "architecture",
+        "design-quality"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict containing components, modules, and metadata.",
+          "type": "object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "solid.lsp_analyze",
+      "description": "Analyzes an architecture design for Liskov Substitution Principle (LSP) compliance. Detects interface contracts that are violated or overly constrained in derived adapters or implementations.",
+      "category": "solid",
+      "tags": [
+        "solid",
+        "lsp",
+        "liskov",
+        "substitution",
+        "architecture",
+        "design-quality"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict containing components, modules, and metadata.",
+          "type": "object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "solid.isp_analyze",
+      "description": "Analyzes an architecture design for Interface Segregation Principle (ISP) compliance. Flags fat interfaces with methods unused by all clients and recommends interface segregation.",
+      "category": "solid",
+      "tags": [
+        "solid",
+        "isp",
+        "interface-segregation",
+        "architecture",
+        "design-quality"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict containing components, modules, and metadata.",
+          "type": "object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "solid.dip_analyze",
+      "description": "Analyzes an architecture design for Dependency Inversion Principle (DIP) compliance. Detects high-level modules depending on low-level concrete implementations and recommends abstraction injection.",
+      "category": "solid",
+      "tags": [
+        "solid",
+        "dip",
+        "dependency-inversion",
+        "architecture",
+        "design-quality"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict containing components, modules, and metadata.",
+          "type": "object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "design_patterns.creational_analyze",
+      "description": "Analyzes architecture design and SOLID violations to recommend GoF Creational patterns (Factory Method, Abstract Factory, Builder, Singleton, Prototype). Returns scored candidates sorted by contextual fitness.",
+      "category": "design_patterns",
+      "tags": [
+        "design-patterns",
+        "gof",
+        "creational",
+        "architecture",
+        "solid"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle codes (srp, ocp, lsp, isp, dip).",
+          "type": "array",
+          "required": false
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style: microservices, hexagonal, monolith, or layered.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "design_patterns.structural_analyze",
+      "description": "Analyzes architecture design and SOLID violations to recommend GoF Structural patterns (Adapter, Facade, Decorator, Proxy, Bridge, Composite). Returns scored candidates sorted by contextual fitness.",
+      "category": "design_patterns",
+      "tags": [
+        "design-patterns",
+        "gof",
+        "structural",
+        "architecture",
+        "solid"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle codes (srp, ocp, lsp, isp, dip).",
+          "type": "array",
+          "required": false
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style: microservices, hexagonal, monolith, or layered.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "design_patterns.behavioral_analyze",
+      "description": "Analyzes architecture design and SOLID violations to recommend GoF Behavioral patterns (Strategy, Observer, Command, Chain of Responsibility, Template Method, State, Mediator). Returns scored candidates sorted by contextual fitness.",
+      "category": "design_patterns",
+      "tags": [
+        "design-patterns",
+        "gof",
+        "behavioral",
+        "architecture",
+        "solid"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle codes (srp, ocp, lsp, isp, dip).",
+          "type": "array",
+          "required": false
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style: microservices, hexagonal, monolith, or layered.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "design_patterns.enterprise_analyze",
+      "description": "Analyzes architecture design and SOLID violations to recommend enterprise patterns (Repository, Unit of Work, CQRS, Event Sourcing, Saga, Outbox, Strangler Fig, Anti-Corruption Layer). Returns scored candidates sorted by contextual fitness.",
+      "category": "design_patterns",
+      "tags": [
+        "design-patterns",
+        "enterprise",
+        "ddd",
+        "architecture",
+        "solid"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle codes (srp, ocp, lsp, isp, dip).",
+          "type": "array",
+          "required": false
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style: microservices, hexagonal, monolith, or layered.",
+          "type": "string",
+          "required": false,
+          "default": ""
+        }
+      ]
+    },
+    {
+      "name": "quality_assessment.maintainability_assess",
+      "description": "Assesses maintainability quality attribute (0–100) based on SRP and OCP compliance. A high score indicates components have single, stable responsibilities and are closed for modification but open for extension.",
+      "category": "quality_assessment",
+      "tags": [
+        "quality",
+        "maintainability",
+        "srp",
+        "ocp",
+        "architecture"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle ids (e.g. ['srp','ocp']).",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "solid_warnings",
+          "description": "List of warned SOLID principle ids.",
+          "type": "array",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "quality_assessment.extensibility_assess",
+      "description": "Assesses extensibility quality attribute (0–100) based on OCP and DIP compliance. A high score indicates the architecture supports new behaviours without modifying existing components and depends on abstractions.",
+      "category": "quality_assessment",
+      "tags": [
+        "quality",
+        "extensibility",
+        "ocp",
+        "dip",
+        "architecture"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle ids.",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "solid_warnings",
+          "description": "List of warned SOLID principle ids.",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style (microservices, hexagonal, monolith).",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "pattern_names",
+          "description": "List of recommended design pattern names.",
+          "type": "array",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "quality_assessment.testability_assess",
+      "description": "Assesses testability quality attribute (0–100) based on ISP and DIP compliance. A high score indicates the architecture supports isolated, dependency-injected tests with focused interfaces.",
+      "category": "quality_assessment",
+      "tags": [
+        "quality",
+        "testability",
+        "isp",
+        "dip",
+        "architecture"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle ids.",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "solid_warnings",
+          "description": "List of warned SOLID principle ids.",
+          "type": "array",
+          "required": true
+        },
+        {
+          "name": "pattern_names",
+          "description": "List of recommended design pattern names.",
+          "type": "array",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "quality_assessment.scalability_assess",
+      "description": "Assesses scalability quality attribute (0–100) based on statelessness indicators, workload partitioning decisions, and async/event-driven patterns. Microservices with CQRS/event-sourcing and a stateless API gateway score highest.",
+      "category": "quality_assessment",
+      "tags": [
+        "quality",
+        "scalability",
+        "statelessness",
+        "partitioning",
+        "async",
+        "architecture"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "architecture_style",
+          "description": "Architecture style (microservices, hexagonal, monolith).",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "pattern_names",
+          "description": "List of recommended design pattern names.",
+          "type": "array",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "quality_assessment.security_boundary_assess",
+      "description": "Assesses security boundary clarity (0–100) based on explicit security layers, authentication/authorization boundaries (JWT/OAuth/gateway), and data classification zones (bounded contexts, PII labels, encryption hints). A high score indicates well-defined, enforced security boundaries across all layers.",
+      "category": "quality_assessment",
+      "tags": [
+        "quality",
+        "security",
+        "authentication",
+        "authorization",
+        "data-classification",
+        "architecture"
+      ],
+      "parameters": [
+        {
+          "name": "design_input",
+          "description": "Serialized NormalizedDesignInput dict.",
+          "type": "object",
+          "required": true
+        },
+        {
+          "name": "solid_violations",
+          "description": "List of violated SOLID principle ids.",
+          "type": "array",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,7 @@ on:
       - "app/cli/**"
       - "build/**"
       - ".github/workflows/build-cli.yml"
+  workflow_dispatch: {}
 
 jobs:
   build-linux:
@@ -49,9 +50,24 @@ jobs:
           pip install pyinstaller
 
       - name: Build Windows binary
+        env:
+          AGENTS_API_URL: ${{ secrets.AGENTS_API_URL }}
         run: |
           $DIST = "app/cli/dist"
           New-Item -ItemType Directory -Force -Path $DIST
+
+          # Generate build-time config so the URL is baked into the binary
+          # (mirrors build/build_windows.sh — without this the .exe ships
+          # with no API URL and every command fails at startup).
+          if (-not $env:AGENTS_API_URL) {
+            Write-Error "AGENTS_API_URL secret is not set."
+            exit 1
+          }
+          Set-Content -Path "app/cli/_build_config.py" -Value @(
+            "# Generated at build time — do not edit manually.",
+            "AGENTS_API_URL = `"$env:AGENTS_API_URL`""
+          )
+
           pyinstaller `
             --onefile `
             --name agents-windows `

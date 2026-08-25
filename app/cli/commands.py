@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
+from app.cli._version import CLI_VERSION
 from app.cli.client import AgentsClient
 
 app = typer.Typer(
@@ -18,6 +19,9 @@ app = typer.Typer(
 )
 console = Console()
 
+_UPDATE_CHECK_FILE = Path.home() / ".agents-cli" / "update_check.json"
+_UPDATE_CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # once a day, to avoid extra latency on every run
+
 
 def _get_platform_agent():
     if platform.system() == "Windows":
@@ -25,6 +29,59 @@ def _get_platform_agent():
         return WindowsPlatformAgent()
     from app.cli.platforms.linux import LinuxPlatformAgent
     return LinuxPlatformAgent()
+
+
+def _parse_version(v: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(p) for p in v.strip().split("."))
+    except Exception:
+        return (0,)
+
+
+def _is_newer(remote: str, local: str) -> bool:
+    return _parse_version(remote) > _parse_version(local)
+
+
+def _latest_known_version(api_url: Optional[str] = None) -> Optional[str]:
+    
+    import json
+    import time
+
+    now = time.time()
+    try:
+        if _UPDATE_CHECK_FILE.exists():
+            cached = json.loads(_UPDATE_CHECK_FILE.read_text())
+            if now - cached.get("checked_at", 0) < _UPDATE_CHECK_INTERVAL_SECONDS:
+                return cached.get("latest_version") or None
+    except Exception:
+        pass
+
+    try:
+        client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+        latest = client.cli_version().get("version", "")
+    except Exception:
+        return None
+
+    try:
+        _UPDATE_CHECK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _UPDATE_CHECK_FILE.write_text(json.dumps({"checked_at": now, "latest_version": latest}))
+    except Exception:
+        pass
+
+    return latest or None
+
+
+@app.callback()
+def _main(ctx: typer.Context):
+    
+    if ctx.invoked_subcommand in (None, "update"):
+        return
+    latest = _latest_known_version()
+    if latest and _is_newer(latest, CLI_VERSION):
+        console.print(
+            f"[yellow]![/yellow] [dim]Nova versão do Agents CLI disponível: "
+            f"{latest} (você está na {CLI_VERSION}). Rode [bold]agents update[/bold] para atualizar.[/dim]\n"
+        )
 
 
 def _collect_artifacts(result: dict) -> list[dict]:
@@ -43,11 +100,11 @@ def generate(
     name: str = typer.Option(..., "--name", "-n", help="Project name"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory (default: current directory)"),
     language: str = typer.Option("go", "--language", "-l", help="Backend language (go, python)"),
-    framework: str = typer.Option("fiber", "--framework", "-f", help="Framework (fiber, gin, echo, fastapi)"),
+    framework: str = typer.Option("fiber", "--framework", "-f", help="Framework (fiber, gin, echo, fastapi, nextjs, design, frontend, vercel, solid, design_patterns, quality_assessment)"),
     scope: str = typer.Option("backend", "--scope", "-s", help="Scope: backend, frontend, fullstack"),
     api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True, help="Override API URL"),
 ):
-    """Generate a production-ready project from a natural language description."""
+    
     client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
     agent = _get_platform_agent()
 
@@ -55,8 +112,7 @@ def generate(
 
     console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — generating [bold]{name}[/bold]")
     console.print(f"[dim]Output: {output_path}[/dim]\n")
-
-    # health check
+    
     try:
         client.health()
     except Exception:
@@ -103,7 +159,7 @@ def list_skills(
     agent: Optional[str] = typer.Option(None, "--agent", "-a", help="Filter by agent name"),
     api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
 ):
-    """List all available skills."""
+    
     client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
 
     try:
@@ -130,7 +186,7 @@ def improve(
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory for generated files (default: project path)"),
     api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
 ):
-    """Apply improvements or add new features to an existing project."""
+    
     from app.cli.project_scanner import scan_project
 
     client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
@@ -229,7 +285,7 @@ def ask(
 
     console.print(f"\n[bold cyan]Agents[/bold cyan] — [dim]{project_path.name}[/dim]\n")
 
-    # Health check
+    
     try:
         client.health()
     except Exception:
@@ -240,7 +296,7 @@ def ask(
         task = progress.add_task(_t("Analisando pedido...", "Analyzing request..."), total=None)
         project_context = scan_project(str(project_path))
 
-        # Route intent via API
+        
         try:
             intent = client.route_intent(query=query, project_context=project_context)
         except Exception as e:
@@ -255,8 +311,7 @@ def ask(
         console.print(f"[dim]{_t('Seja mais específico. Ex: criar entidade User ou diagnosticar erro Go', 'Try being more specific. Example: create User entity or diagnose Go error')}[/dim]")
         raise typer.Exit(1)
 
-    # ── Show plan ────────────────────────────────────────────────────────────
-
+    
     is_diagnostic = intent.get("is_diagnostic", False)
     agent_name   = intent.get("agent", "")
     skill_name   = intent.get("skill", "")
@@ -288,8 +343,7 @@ def ask(
     title = _t("Plano de Execução", "Execution Plan")
     console.print(Panel(plan_text, title=f"[bold]{title}[/bold]", border_style="cyan", padding=(0, 2)))
 
-    # ── Confirm ──────────────────────────────────────────────────────────────
-
+    
     proceed = yes or Confirm.ask(f"\n{_t('Executar?', 'Proceed?')}", default=False)
     if not proceed:
         console.print(f"[dim]{_t('Operação cancelada.', 'Operation cancelled.')}[/dim]")
@@ -297,18 +351,17 @@ def ask(
 
     console.print()
 
-    # ── Execute ──────────────────────────────────────────────────────────────
-
+    
     if is_diagnostic:
         lang = intent.get("detected_language", "go")
 
-        # Verify commands: first run to capture errors; re-run after each fix to confirm
+        
         verify_cmds: dict[str, list[str]] = {
             "go":     ["go", "build", "./..."],
             "nextjs": ["npx", "tsc", "--noEmit"],
             "python": ["python", "-m", "py_compile"],
         }
-        # Docker-aware secondary verification when docker-compose.yml is present
+        
         all_files = project_context.get("files", [])
         has_compose = any(
             f.get("path", "") in ("docker-compose.yml", "docker-compose.yaml")
@@ -369,26 +422,26 @@ def ask(
                         module_name = line.split()[1]
                         break
 
-        # ── Initial error capture ─────────────────────────────────────────────
+        
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as p:
             cmd_str = " ".join(verify_cmd)
             p.add_task(_t(f"Rodando `{cmd_str}`...", f"Running `{cmd_str}`..."), total=None)
             passed, error_output = _run_build(verify_cmd)
             p.stop()
 
-        # If local build passes, check docker build if available
+        
         if passed and has_compose:
             with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as p:
                 p.add_task(_t("Rodando docker compose build...", "Running docker compose build..."), total=None)
                 passed, error_output = _run_docker_build()
                 p.stop()
 
-        # If everything passes, use user's description as the error source
+        
         if passed:
             console.print(f"[dim]{_t('Build passou — analisando a descrição do erro...', 'Build passed — analyzing described error...')}[/dim]")
             error_output = query
 
-        # ── Diagnostic + fix loop (max 3 iterations) ─────────────────────────
+        
         MAX_RETRIES = 3
         result: dict[str, Any] = {}
         all_written: list[str] = []
@@ -426,17 +479,17 @@ def ask(
                     if not fw.endswith("diagnostic_report.md"):
                         console.print(f"  [green]•[/green] {fw}")
 
-            # ── Re-run verification after fix ─────────────────────────────────
+            
             if attempt < MAX_RETRIES:
                 with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as p:
                     p.add_task(_t("Verificando se o fix funcionou...", "Verifying fix..."), total=None)
-                    # Re-scan so updated files are in context
+                    
                     project_context = scan_project(str(project_path))
                     all_files = project_context.get("files", [])
                     v_passed, v_out = _run_build(verify_cmd)
                     p.stop()
 
-                # Also verify docker build if relevant
+                
                 if v_passed and has_compose:
                     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as p:
                         p.add_task(_t("Verificando docker compose build...", "Verifying docker compose build..."), total=None)
@@ -453,7 +506,7 @@ def ask(
 
         artifacts = result.get("artifacts", [])
     else:
-        # Standard generative skill
+        
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as p:
             t = p.add_task(_t("Gerando código...", "Generating code..."), total=None)
             try:
@@ -467,7 +520,7 @@ def ask(
         artifacts = _collect_artifacts(result)
         all_written: list[str] = []
 
-    # Write files (generative path — diagnostic path already wrote above)
+    
     written: list[str] = []
     if artifacts and not is_diagnostic:
         written = plat_agent.write_artifacts(artifacts, output_path)
@@ -487,7 +540,7 @@ def ask(
     else:
         console.print(f"[bold red]✗[/bold red] {result.get('error', _t('Falha na execução', 'Execution failed'))}")
 
-    # ── Follow-up suggestions ─────────────────────────────────────────────────
+    
 
     if not suggestions:
         console.print()
@@ -507,7 +560,7 @@ def ask(
         sug_type   = suggestion.get("type", "skill")
         sug_desc   = suggestion.get("description", "")
 
-        # ── Command suggestion: just run the shell command locally ───────────
+        
         if sug_type == "command":
             sug_cmd = suggestion.get("command", "")
             if not sug_cmd:
@@ -537,12 +590,12 @@ def ask(
                     console.print(f"  [red]✗[/red] {sug_cmd}: {exc}")
             continue
 
-        # ── Skill suggestion: call /skills/execute via API ───────────────────
+        
         sug_agent  = suggestion.get("agent", "")
         sug_skill  = suggestion.get("skill", "")
         sug_params = dict(suggestion.get("params", {}))
 
-        # Propagate known params from the primary execution
+        
         for k, v in params.items():
             if k not in sug_params:
                 sug_params[k] = v
@@ -717,10 +770,571 @@ def diagnose(
 
 
 @app.command()
+def update(
+    force: bool = typer.Option(False, "--force", "-f", help="Reinstall even if already on the latest version"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Download and install the latest Agents CLI binary, replacing the one currently running."""
+    import shutil as _shutil
+    import stat
+    import subprocess
+    import tempfile
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — current version [bold]{CLI_VERSION}[/bold]")
+
+    try:
+        latest = client.cli_version().get("version", "")
+    except Exception as e:
+        console.print(f"[bold red]✗[/bold red] Could not check the latest version: {e}")
+        raise typer.Exit(1)
+
+    if not latest:
+        console.print("[bold red]✗[/bold red] Server did not return a version.")
+        raise typer.Exit(1)
+
+    if not force and not _is_newer(latest, CLI_VERSION):
+        console.print(f"[bold green]✓[/bold green] Already up to date (v{CLI_VERSION}).")
+        return
+
+    system = platform.system()
+    if system == "Windows":
+        is_windows = True
+        target_os = "windows"
+    elif system == "Linux":
+        is_windows = False
+        target_os = "linux"
+    else:
+        console.print(
+            f"[bold red]✗[/bold red] Self-update is not supported on {system} yet. "
+            "Please reinstall using a supported release artifact."
+        )
+        raise typer.Exit(1)
+
+    raw_exe = sys.executable if getattr(sys, "frozen", False) else (_shutil.which("agents") or "")
+    current_exe = Path(raw_exe) if raw_exe else None
+    if not current_exe or not current_exe.exists() or "python" in current_exe.name.lower():
+        console.print(
+            "[yellow]![/yellow] `agents update` only works for the installed binary "
+            "(not when running from source, e.g. via `python -m`).\n"
+            f"[dim]Reinstall manually: curl -fsSL {client._base}/cli/install.sh | bash[/dim]"
+        )
+        raise typer.Exit(1)
+
+    console.print(f"[dim]New version available: {latest}[/dim]")
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Downloading v{latest}...", total=None)
+
+        try:
+            tmp_fd, tmp_name = tempfile.mkstemp(dir=str(current_exe.parent), prefix=".agents-update-")
+        except PermissionError:
+            # Common system installs (e.g. /usr/local/bin) aren't writable by a
+            # regular user — fall back to the system temp dir. The install step
+            # below already handles the privileged move via sudo.
+            tmp_fd, tmp_name = tempfile.mkstemp(prefix=".agents-update-")
+        os.close(tmp_fd)
+        tmp_path = Path(tmp_name)
+
+        try:
+            client.download_cli_binary(tmp_path, target_os=target_os)
+        except Exception as e:
+            progress.stop()
+            tmp_path.unlink(missing_ok=True)
+            console.print(f"[bold red]✗[/bold red] Download failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Installing...")
+
+        if not is_windows:
+            tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+            try:
+                os.replace(tmp_path, current_exe)
+            except OSError:
+                # Covers both PermissionError (e.g. /usr/local/bin not writable)
+                # and cross-device rename failures when the temp file fell back
+                # to a different filesystem than current_exe's directory.
+                progress.stop()
+                console.print(f"[yellow]![/yellow] Could not replace {current_exe} directly — retrying with sudo...")
+                rc = subprocess.run(["sudo", "mv", str(tmp_path), str(current_exe)]).returncode
+                if rc != 0:
+                    console.print("[bold red]✗[/bold red] Update failed.")
+                    raise typer.Exit(1)
+        else:
+            # Windows refuses to overwrite a running .exe. Stage the new binary
+            # next to the current one and finish the swap with a short-lived
+            # detached helper once this process exits.
+            staged = current_exe.with_name(current_exe.stem + ".new.exe")
+            tmp_path.replace(staged)
+            subprocess.Popen(
+                ["cmd", "/c", "timeout", "/t", "2", "&&", "move", "/Y", str(staged), str(current_exe)],
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0),
+            )
+
+        progress.stop()
+
+    if is_windows:
+        console.print(f"[bold green]✓[/bold green] v{latest} staged — finishing install in a few seconds. Re-open your terminal.")
+    else:
+        console.print(f"[bold green]✓[/bold green] Updated to v{latest}.")
+
+
+@app.command()
+def architect(
+    objective: str = typer.Argument(..., help="Business objective or product description"),
+    name: str = typer.Option(..., "--name", "-n", help="Project/session name"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory (default: current directory)"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Design system architecture from business objectives (patterns, diagrams, decisions)."""
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    output_path = agent.resolve_output_path(output or os.getcwd(), name)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — architecting [bold]{name}[/bold]")
+    console.print(f"[dim]Objective: {objective}[/dim]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Designing architecture...", total=None)
+
+        try:
+            result = client.route_intent(
+                query=f"Arquitetar: {objective}",
+                project_context={"files": [], "project_type": "greenfield"},
+            )
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Architecture design failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing architecture artifacts...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = result.get("files", [])
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Architecture created at [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files written[/dim]\n")
+
+    if result.get("errors"):
+        console.print("[yellow]Warnings:[/yellow]")
+        for err in result["errors"]:
+            console.print(f"  [dim]• {err}[/dim]")
+
+
+@app.command()
+def quality(
+    path: str = typer.Argument(".", help="Path to project to assess"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory for report"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Assess architecture quality (maintainability, extensibility, testability, scalability, security)."""
+    from app.cli.project_scanner import scan_project
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    project_path = Path(path).resolve()
+    output_path = Path(output).resolve() if output else project_path
+
+    if not project_path.is_dir():
+        console.print(f"[bold red]✗[/bold red] Path not found: {project_path}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — quality assessment for [bold]{project_path.name}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+        project_context = scan_project(str(project_path))
+        progress.update(task, description=f"Assessing quality ({project_context['file_count']} files)...")
+
+        try:
+            result = client.execute_skill(
+                agent="quality_assessment",
+                skill="quality_assessment.generate_quality_report",
+                params={"project_context": project_context},
+            )
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Quality assessment failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing report...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Quality report written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
+def solid(
+    path: str = typer.Argument(".", help="Path to project to analyze"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory for report"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Analyze codebase for SOLID principle violations."""
+    from app.cli.project_scanner import scan_project
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    project_path = Path(path).resolve()
+    output_path = Path(output).resolve() if output else project_path
+
+    if not project_path.is_dir():
+        console.print(f"[bold red]✗[/bold red] Path not found: {project_path}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — SOLID analysis for [bold]{project_path.name}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+        project_context = scan_project(str(project_path))
+        progress.update(task, description=f"Analyzing SOLID principles ({project_context['file_count']} files)...")
+
+        try:
+            result = client.execute_skill(
+                agent="solid",
+                skill="solid.analyze_solid_principles",
+                params={"design_input": project_context},
+            )
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] SOLID analysis failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing report...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] SOLID report written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
+def patterns(
+    context: str = typer.Argument(..., help="Domain context (e.g. 'Order management', 'Payment processing')"),
+    pattern: Optional[str] = typer.Option(None, "--pattern", "-p", help="Specific pattern (factory, strategy, cqrs, etc.)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """Generate design pattern implementations for a domain context."""
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    output_path = agent.resolve_output_path(output or os.getcwd(), "design-patterns")
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — design patterns for [bold]{context}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Generating patterns...", total=None)
+
+        try:
+            result = client.execute_skill(
+                agent="design_patterns",
+                skill="design_patterns.recommend_patterns",
+                params={"context": context, "pattern": pattern} if pattern else {"context": context},
+            )
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Pattern generation failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing files...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Patterns written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
+def nextjs(
+    command: str = typer.Argument(..., help="Subcommand: component, page, layout, action, auth, middleware, form, api, streaming, isr, crud, metadata, og, sitemap, optimize"),
+    name: str = typer.Option(..., "--name", "-n", help="Name (component, page route, action name, etc.)"),
+    description: Optional[str] = typer.Option(None, "--description", "-d", help="Description"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+    **kwargs,
+):
+    """Generate Next.js 15 App Router code (components, pages, actions, auth, etc.)."""
+    import json
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    output_path = agent.resolve_output_path(output or os.getcwd(), "nextjs-app")
+
+    skill_map = {
+        "component": "nextjs.generate_component",
+        "page": "nextjs.generate_page",
+        "layout": "nextjs.generate_layout",
+        "loading": "nextjs.generate_loading",
+        "error": "nextjs.generate_error_page",
+        "form": "nextjs.generate_form_component",
+        "action": "nextjs.generate_server_action",
+        "api": "nextjs.generate_api_route",
+        "middleware": "nextjs.generate_middleware",
+        "auth": "nextjs.setup_nextauth",
+        "protected": "nextjs.generate_protected_route",
+        "streaming": "nextjs.generate_streaming_page",
+        "isr": "nextjs.implement_isr",
+        "crud": "nextjs.generate_crud_actions",
+        "metadata": "nextjs.generate_metadata",
+        "og": "nextjs.generate_og_image",
+        "sitemap": "nextjs.generate_sitemap",
+        "optimize": "nextjs.optimize_images",
+        "fonts": "nextjs.optimize_fonts",
+        "codesplit": "nextjs.implement_code_splitting",
+        "decompose": "nextjs.decompose_into_components",
+        "routing": "nextjs.generate_route_structure",
+    }
+
+    skill = skill_map.get(command)
+    if not skill:
+        console.print(f"[bold red]✗[/bold red] Unknown subcommand: {command}")
+        console.print(f"Available: {', '.join(skill_map.keys())}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — Next.js [bold]{command}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    params = {"name": name}
+    if description:
+        params["description"] = description
+
+    # Pass through any extra kwargs
+    for k, v in kwargs.items():
+        if v is not None:
+            params[k] = v
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Generating Next.js {command}...", total=None)
+
+        try:
+            result = client.execute_skill(agent="nextjs", skill=skill, params=params)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Generation failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing files...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Next.js {command} written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
+def design(
+    command: str = typer.Argument(..., help="Subcommand: tokens, theme, palette, system, dashboard, table, sidebar, layout, accessibility, animations, variants, shadcn, skip-links, loading"),
+    name: str = typer.Option(..., "--name", "-n", help="Name (component, palette name, etc.)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+    **kwargs,
+):
+    """Generate design system components (tokens, themes, dashboards, tables, accessibility, animations)."""
+    import json
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    output_path = agent.resolve_output_path(output or os.getcwd(), "design-system")
+
+    skill_map = {
+        "tokens": "design.generate_design_tokens_css",
+        "theme": "design.generate_tailwind_config",
+        "palette": "design.generate_color_palette",
+        "system": "design.generate_design_system",
+        "dashboard": "design.generate_dashboard",
+        "table": "design.generate_data_table",
+        "sidebar": "design.generate_sidebar_layout",
+        "layout": "design.generate_responsive_layout",
+        "accessibility": "design.audit_accessibility",
+        "animations": "design.implement_animations",
+        "variants": "design.generate_component_variants",
+        "shadcn": "design.setup_shadcn",
+        "skip-links": "design.generate_skip_links",
+        "loading": "design.generate_loading_ui",
+        "dark-mode": "design.implement_dark_mode",
+        "type-scale": "design.generate_type_scale",
+        "fonts": "design.setup_next_fonts",
+    }
+
+    skill = skill_map.get(command)
+    if not skill:
+        console.print(f"[bold red]✗[/bold red] Unknown subcommand: {command}")
+        console.print(f"Available: {', '.join(skill_map.keys())}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — Design [bold]{command}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    params = {"name": name}
+    for k, v in kwargs.items():
+        if v is not None:
+            params[k] = v
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Generating design {command}...", total=None)
+
+        try:
+            result = client.execute_skill(agent="design", skill=skill, params=params)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Generation failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing files...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Design {command} written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
+def vercel(
+    command: str = typer.Argument(..., help="Subcommand: deploy, edge-config, kv, cron, logs"),
+    project: str = typer.Option(..., "--project", "-p", help="Project name"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output directory"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+    **kwargs,
+):
+    """Vercel deployment and platform utilities."""
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    output_path = agent.resolve_output_path(output or os.getcwd(), "vercel")
+
+    skill_map = {
+        "deploy": "vercel.generate_deploy_config",
+        "edge-config": "vercel.generate_edge_config",
+        "kv": "vercel.generate_kv_usage",
+        "cron": "vercel.generate_cron_jobs",
+        "logs": "vercel.generate_log_drain",
+    }
+
+    skill = skill_map.get(command)
+    if not skill:
+        console.print(f"[bold red]✗[/bold red] Unknown subcommand: {command}")
+        console.print(f"Available: {', '.join(skill_map.keys())}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Agents CLI[/bold cyan] — Vercel [bold]{command}[/bold]\n")
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    params = {"project": project}
+    for k, v in kwargs.items():
+        if v is not None:
+            params[k] = v
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task(f"Generating Vercel {command}...", total=None)
+
+        try:
+            result = client.execute_skill(agent="vercel", skill=skill, params=params)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Generation failed: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Writing files...")
+        artifacts = _collect_artifacts(result)
+
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+
+        progress.stop()
+
+    console.print(f"[bold green]✓[/bold green] Vercel {command} written to [bold]{output_path}[/bold]")
+    console.print(f"[dim]{len(written)} files[/dim]\n")
+
+
+@app.command()
 def version():
     """Show CLI version and API status."""
     client = AgentsClient()
-    console.print("[bold cyan]Agents CLI[/bold cyan] v0.1.0")
+    console.print(f"[bold cyan]Agents CLI[/bold cyan] v{CLI_VERSION}")
     console.print(f"Platform: [dim]{platform.system()} {platform.machine()}[/dim]")
 
     try:
@@ -728,6 +1342,10 @@ def version():
         console.print(f"API: [bold green]online[/bold green] — {health.get('skills_registered', 0)} skills registered")
     except Exception:
         console.print("API: [bold red]unreachable[/bold red]")
+
+    latest = _latest_known_version()
+    if latest and _is_newer(latest, CLI_VERSION):
+        console.print(f"\n[yellow]![/yellow] Update available: {latest}. Run [bold]agents update[/bold].")
 
 
 def cli():

@@ -7,6 +7,7 @@ from app.architecture.agents.solution_flow_diagram import SolutionFlowDiagramAge
 from app.architecture.agents.validation_agent import SolutionArchitectureValidationAgent
 from app.architecture.agents.system.design_partner_orchestrator import DesignPartnerOrchestrator
 from app.architecture.context.pipeline_context import PipelineContext
+from app.architecture.schemas.feedback import ArchitectureStage
 from app.architecture.schemas.system_design import (
     MicroservicesSystemDesign,
     MonolithSystemDesign,
@@ -58,17 +59,7 @@ class WorkflowCoordinator:
         backend_framework: str = "fiber",
         forced_pattern: str | None = None,
     ) -> WorkflowOutput:
-        """
-        Execute the complete workflow from a business objective to generated code artifacts.
-
-        Args:
-            objective: Natural-language description of what to build.
-            scope: backend | frontend | fullstack — which artifacts to generate.
-            session_id: Optional session ID for an already-started architecture session.
-            existing_context: If provided, skips the parse step and uses this context directly.
-            forced_pattern: When set (e.g. "microservices"), bypasses the decision engine
-                            and forces this architecture pattern directly.
-        """
+        
         ctx = existing_context or PipelineContext(
             session_id=session_id or PipelineContext().session_id
         )
@@ -160,44 +151,65 @@ class WorkflowCoordinator:
         return output
 
     
+    async def run_stage(self, stage: ArchitectureStage, ctx: PipelineContext) -> PipelineContext:
+        
+        if stage == ArchitectureStage.REQUIREMENTS_PARSE:
+            await self._parser.run(ctx)
+        elif stage == ArchitectureStage.SOLUTION_STRATEGY:
+            ctx.decision = None
+            ctx.diagram = None
+            ctx.metadata.pop("validation_report", None)
+            if ctx.requirements is not None:
+                ctx = await self._decision_engine.run(ctx)
+        elif stage == ArchitectureStage.FLOW_DIAGRAM:
+            if ctx.decision is not None:
+                ctx = await self._diagram_agent.run(ctx)
+        elif stage == ArchitectureStage.VALIDATION:
+            if ctx.decision is not None and ctx.requirements is not None:
+                ctx = await self._validation_agent.run(ctx)
+        elif stage == ArchitectureStage.DESIGN_PARTNER:
+            ctx.system_design = None
+            ctx = await self._design_partner.run(ctx)
+        elif stage == ArchitectureStage.SOLID_ANALYSIS:
+            ctx.metadata.pop("solid_compliance_report", None)
+            await self._run_solid_analysis(ctx)
+        elif stage == ArchitectureStage.PATTERN_RECOMMENDATION:
+            ctx.metadata.pop("pattern_recommendation_report", None)
+            await self._run_pattern_recommendation(ctx)
+        elif stage == ArchitectureStage.QUALITY_ASSESSMENT:
+            ctx.metadata.pop("quality_assessment_report", None)
+            await self._run_quality_assessment(ctx)
+        return ctx
+
     async def _run_solid_analysis(self, ctx: PipelineContext) -> None:
-        """Auto-trigger SOLID analysis after design artifacts are produced."""
+        
         from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
         solid_agent = self._orchestrator.agents.get("solid")
         if not isinstance(solid_agent, SOLIDPrinciplesEnforcerAgent):
             return
-        try:
-            report = await solid_agent.analyze(ctx)
-            ctx.metadata["solid_compliance_report"] = report
-        except Exception:
-            pass
+        report = await solid_agent.analyze(ctx)
+        ctx.metadata["solid_compliance_report"] = report
 
     async def _run_pattern_recommendation(self, ctx: PipelineContext) -> None:
-        """Auto-trigger design pattern recommendation after SOLID analysis."""
+        
         from app.agents.design_pattern_agent import DesignPatternRecommenderAgent
         dp_agent = self._orchestrator.agents.get("design_patterns")
         if not isinstance(dp_agent, DesignPatternRecommenderAgent):
             return
-        try:
-            solid_report = ctx.metadata.get("solid_compliance_report")
-            report = await dp_agent.recommend(ctx, solid_report=solid_report)
-            ctx.metadata["pattern_recommendation_report"] = report
-        except Exception:
-            pass
+        solid_report = ctx.metadata.get("solid_compliance_report")
+        report = await dp_agent.recommend(ctx, solid_report=solid_report)
+        ctx.metadata["pattern_recommendation_report"] = report
 
     async def _run_quality_assessment(self, ctx: PipelineContext) -> None:
-        """Auto-trigger quality assessment after SOLID + pattern analysis."""
+        
         from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
         qa_agent = self._orchestrator.agents.get("quality_assessment")
         if not isinstance(qa_agent, ArchitectureQualityAssessmentAgent):
             return
-        try:
-            solid_report = ctx.metadata.get("solid_compliance_report")
-            pattern_report = ctx.metadata.get("pattern_recommendation_report")
-            report = await qa_agent.assess(ctx, solid_report=solid_report, pattern_report=pattern_report)
-            ctx.metadata["quality_assessment_report"] = report
-        except Exception:
-            pass
+        solid_report = ctx.metadata.get("solid_compliance_report")
+        pattern_report = ctx.metadata.get("pattern_recommendation_report")
+        report = await qa_agent.assess(ctx, solid_report=solid_report, pattern_report=pattern_report)
+        ctx.metadata["quality_assessment_report"] = report
 
     def _apply_forced_pattern(self, ctx: PipelineContext, pattern_name: str) -> PipelineContext:
         

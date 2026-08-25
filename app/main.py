@@ -11,12 +11,15 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+from app.architecture.schemas.feedback import FeedbackProcessingResult
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 _orchestrator = None
 _workflow_coordinator = None
+_feedback_engine = None
 _go_llm = None
 _architecture_sessions: dict[str, Any] = {}
 _session_locks: dict[str, asyncio.Lock] = {}
@@ -37,10 +40,11 @@ async def _get_or_create_session(session_id: str | None, pipeline_context_cls: t
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _orchestrator, _workflow_coordinator, _go_llm
+    global _orchestrator, _workflow_coordinator, _feedback_engine, _go_llm
     from app.llm.huggingface import HuggingFaceProvider
     from app.agents.orchestrator import AgentOrchestrator
     from app.architecture.workflow_coordinator import WorkflowCoordinator
+    from app.architecture.feedback.engine import FeedbackEngine
 
     token = os.getenv("HUGGINGFACE_TOKEN")
     model = os.getenv("LLM_MODEL_1")
@@ -50,11 +54,12 @@ async def lifespan(app: FastAPI):
     _go_llm = HuggingFaceProvider(token=token, model=go_model) if token and go_model else llm
     _orchestrator = AgentOrchestrator(llm=llm, go_llm=_go_llm)
     _workflow_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=llm)
+    _feedback_engine = FeedbackEngine(coordinator=_workflow_coordinator)
 
     go_label = go_model if go_model else "fallback to LLM_MODEL_1"
-    print(f"✓ Agents ready — LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
-    print(f"✓ Go agent LLM: {go_label if token else 'disabled (no token)'}")
-    print(f"✓ MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns, /mcp/quality-assessment")
+    print(f"[OK] Agents ready -- LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
+    print(f"[OK] Go agent LLM: {go_label if token else 'disabled (no token)'}")
+    print(f"[OK] MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns, /mcp/quality-assessment")
     yield
 
 
@@ -155,7 +160,6 @@ class AskRequest(BaseModel):
     project_context: dict[str, Any] = {}
 
 
-# ── CLI Installer Downloads ───────────────────────────────────────────────────
 
 @app.get("/cli/download/linux", tags=["CLI"])
 async def download_linux():
@@ -185,6 +189,17 @@ async def cli_install_script():
     return PlainTextResponse(content=content, media_type="text/plain")
 
 
+@app.get("/cli/version", tags=["CLI"])
+async def cli_version():
+    """Latest CLI version available, matching the binaries this deploy serves.
+
+    Installed CLIs poll this to detect when `agents update` should run instead
+    of requiring users to reinstall from scratch.
+    """
+    from app.cli._version import CLI_VERSION
+    return {"version": CLI_VERSION}
+
+
 @app.get("/cli/status", tags=["CLI"])
 async def cli_status():
     """Check which CLI installers are available for download."""
@@ -196,7 +211,6 @@ async def cli_status():
     }
 
 
-# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["Health"])
 async def root():
@@ -417,6 +431,9 @@ async def architecture_run(request: ArchitectureRunRequest):
             existing_context=ctx,
         )
 
+    if _feedback_engine is not None:
+        _feedback_engine.register_job(output.session_id, ctx)
+
     return {
         "session_id": output.session_id,
         "architecture_pattern": output.architecture_pattern,
@@ -426,6 +443,69 @@ async def architecture_run(request: ArchitectureRunRequest):
         "frontend_artifacts_count": len(output.frontend_artifacts),
         "has_integration_contracts": output.integration_contracts is not None,
     }
+
+
+class ArchitectureFeedbackEndpointRequest(BaseModel):
+    target_section: str
+    feedback_type: str
+    feedback_text: str = ""
+    constraint_additions: list[str] = []
+
+
+@app.post("/architecture/feedback/{job_id}", response_model=FeedbackProcessingResult, tags=["Solution Architecture"])
+async def architecture_feedback(job_id: str, request: ArchitectureFeedbackEndpointRequest):
+    """
+    Submit targeted feedback on one section of a generated architecture and
+    trigger selective re-evaluation of only the relevant pipeline stages.
+
+    Body:
+      - target_section: solution_strategy | design_partner_selection | solid_findings
+        | pattern_recommendations | quality_scores
+      - feedback_type: rejection | refinement | approval
+      - feedback_text: natural language explanation
+      - constraint_additions: optional new requirements to incorporate
+
+    Approval marks the section as approved (no stages re-run). Rejection and
+    refinement re-evaluate only the target section plus unapproved downstream
+    sections, preserving every approved upstream output in a new context snapshot.
+    """
+    from app.architecture.schemas.feedback import ArchitectureFeedback, FeedbackType, TargetSection
+
+    if _feedback_engine is None:
+        raise HTTPException(503, "Service not initialized")
+
+
+    try:
+        target_section = TargetSection(request.target_section)
+    except ValueError:
+        raise HTTPException(
+            400,
+            f"Invalid target_section '{request.target_section}'. "
+            f"Valid: {[s.value for s in TargetSection]}",
+        )
+    try:
+        feedback_type = FeedbackType(request.feedback_type)
+    except ValueError:
+        raise HTTPException(
+            400,
+            f"Invalid feedback_type '{request.feedback_type}'. "
+            f"Valid: {[t.value for t in FeedbackType]}",
+        )
+
+    feedback = ArchitectureFeedback(
+        target_section=target_section,
+        feedback_type=feedback_type,
+        feedback_text=request.feedback_text,
+        constraint_additions=request.constraint_additions,
+    )
+
+    try:
+        return await _feedback_engine.submit(job_id, feedback)
+    except KeyError as e:
+        raise HTTPException(404, str(e)) from e
+    except Exception as e:
+        logger.exception("Feedback processing failed", extra={"job_id": job_id})
+        raise HTTPException(500, f"Feedback processing failed: {e}") from e
 
 
 
@@ -1125,7 +1205,7 @@ def cli():
     uvicorn.run(
         "app.main:app",
         host=os.getenv("API_HOST", "0.0.0.0"),
-        port=int(os.getenv("API_PORT", "8000")),
+        port=int(os.getenv("API_PORT", "6000")),
         reload=os.getenv("API_DEBUG", "true").lower() == "true",
     )
 

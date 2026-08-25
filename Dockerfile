@@ -53,15 +53,19 @@ COPY . .
 RUN chmod -R 755 /app && \
     chown -R appuser:appuser /app
 
-ENV AUTH_URL="" \
+ENV AGENT_API_URL="" \
+    API_BASE_URL="" \
     HUGGINGFACE_TOKEN="" \
     LLM_MODEL_1="" \ 
     LLM_MODEL_2="" \ 
-    LLM_MODEL_GO=""
+    LLM_MODEL_GO="" \ 
+    API_HOST="" \ 
+    API_PORT=""
+
     
 
-EXPOSE 8000
+EXPOSE 6000
 
 USER appuser
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8045"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "6000"]
