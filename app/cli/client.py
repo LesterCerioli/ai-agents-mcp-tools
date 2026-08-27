@@ -3,6 +3,10 @@ import pathlib
 from typing import Any
 
 import httpx
+from dotenv import load_dotenv
+
+# Carrega .env para CLI local sem binário baked (GROCK_API_TOKEN, AGENTS_API_URL, etc.)
+load_dotenv()
 
 try:
     from app.cli._build_config import AGENTS_API_URL as _BAKED_URL
@@ -137,6 +141,52 @@ class AgentsClient:
                     "source_files": source_files,
                     "module_name": module_name,
                     "version": version,
+                },
+            )
+            r.raise_for_status()
+            return r.json()
+
+    # ── Grok-forced helpers ──────────────────────────────────────────────
+    def grok_status(self) -> dict[str, Any]:
+        """Retorna status Grok sem expor token."""
+        with httpx.Client(timeout=10.0) as c:
+            r = c.get(f"{self._base}/llm/grok/status")
+            r.raise_for_status()
+            return r.json()
+
+    def grok_evaluate(
+        self,
+        instruction: str,
+        project_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Avalia projeto existente via Grok + skills (sem executar)."""
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/grok/evaluate",
+                json={
+                    "instruction": instruction,
+                    "project_files": project_context.get("files", []),
+                    "project_type": project_context.get("project_type", "unknown"),
+                },
+            )
+            r.raise_for_status()
+            return r.json()
+
+    def grok_improve(
+        self,
+        instruction: str,
+        project_context: dict[str, Any],
+        execute: bool = True,
+    ) -> dict[str, Any]:
+        """Fluxo completo Grok: avalia + executa skills + complementa."""
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/grok/improve",
+                json={
+                    "instruction": instruction,
+                    "project_files": project_context.get("files", []),
+                    "project_type": project_context.get("project_type", "unknown"),
+                    "execute": execute,
                 },
             )
             r.raise_for_status()

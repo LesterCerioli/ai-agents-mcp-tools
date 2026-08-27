@@ -1,6 +1,13 @@
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 from .bm25_index import SkillBM25Index, SkillMatch
+from .grok import GrokProvider, GROK_RECOMMENDED_MODELS
 from .huggingface import HuggingFaceProvider, RECOMMENDED_MODELS
+
+try:
+    from .factory import create_llm_providers, is_grok_provider
+except ImportError:
+    create_llm_providers = None  # type: ignore
+    is_grok_provider = None  # type: ignore
 from .prompts import NEXTJS_EXPERT, DESIGN_EXPERT, FRONTEND_EXPERT, VERCEL_EXPERT, STYLED_COMPONENTS_EXPERT
 
 __all__ = [
@@ -10,6 +17,8 @@ __all__ = [
     "SkillBM25Index",
     "SkillMatch",
     "HuggingFaceProvider",
+    "GrokProvider",
+    "GROK_RECOMMENDED_MODELS",
     "RECOMMENDED_MODELS",
     "NEXTJS_EXPERT",
     "DESIGN_EXPERT",

@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,7 @@ class BusinessObjectiveParserAgent(BaseArchitectureAgent):
         "Parses natural language business objectives into structured ArchitectureRequirements "
         "with per-dimension confidence scoring and multi-turn clarification support."
     )
+    capabilities: ClassVar[list[str]] = ["solution_parsing", "requirements_extraction"]
     system_prompt = _SYSTEM_PROMPT
 
     def __init__(self, llm: "BaseLLMProvider | None" = None):

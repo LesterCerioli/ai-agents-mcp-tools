@@ -1331,15 +1331,151 @@ def vercel(
 
 
 @app.command()
+def grok(
+    instruction: str = typer.Argument(..., help="Descreva o que avaliar/melhora no projeto (PT/EN)"),
+    path: Optional[str] = typer.Option(None, "--path", "-p", help="Caminho do projeto (default: diretório atual)"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Onde escrever arquivos gerados (default: project path)"),
+    evaluate_only: bool = typer.Option(False, "--evaluate", "-e", help="Apenas avaliar (não executar skills)"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Aplicar sem confirmação"),
+    api_url: Optional[str] = typer.Option(None, "--api-url", hidden=True),
+):
+    """
+    Grok-powered project evaluator + improver — avalia projeto existente e aplica melhorias com skills.
+
+    Usa Grok (xAI) forçado via GROCK_API_TOKEN + Skills para entender requisitos e gerar/corrigir código.
+
+    Exemplos:
+      agents grok "analisar e adicionar autenticação JWT com refresh token" --path ./my-api
+      agents grok "avaliar qualidade e otimizar performance do dashboard" --path ./next-app --evaluate
+      agents grok "corrigir build Go e adicionar testes para payment gateway" --path ./go-service --yes
+    """
+    from app.cli.project_scanner import scan_project
+    from rich.panel import Panel
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+    agent = _get_platform_agent()
+
+    project_path = Path(path or os.getcwd()).resolve()
+    output_path = Path(output).resolve() if output else project_path
+
+    if not project_path.is_dir():
+        console.print(f"[bold red]✗[/bold red] Path not found: {project_path}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Grok + Skills[/bold cyan] — [dim]{project_path.name}[/dim]")
+    console.print(f"[dim]Instrução: {instruction}[/dim]")
+    if evaluate_only:
+        console.print("[dim]Modo: apenas avaliação (sem escrita)[/dim]")
+    console.print()
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]✗[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    # Mostra status Grok
+    try:
+        grok_info = client.grok_status()
+        provider = grok_info.get("provider_label", grok_info.get("model", "unknown"))
+        grok_forced = grok_info.get("grok_forced", False)
+        status_str = f"Grok forçado: {grok_forced} — provider: {provider}"
+        console.print(f"[dim]{status_str}[/dim]\n")
+    except Exception:
+        pass
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Escaneando projeto...", total=None)
+        project_context = scan_project(str(project_path))
+        progress.update(task, description=f"Escaneados {project_context['file_count']} arquivos ({project_context['project_type']}) — Grok avaliando...")
+        try:
+            if evaluate_only:
+                result = client.grok_evaluate(instruction=instruction, project_context=project_context)
+            else:
+                # Primeiro avalia
+                result = client.grok_evaluate(instruction=instruction, project_context=project_context)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Grok evaluate falhou: {e}")
+            raise typer.Exit(1)
+        progress.stop()
+
+    # Mostra análise
+    analysis = result.get("analysis", "")
+    skills = result.get("skills", result.get("suggested_skills", []))
+    if analysis:
+        console.print(Panel(analysis[:2000], title="[bold]Grok Análise[/bold]", border_style="magenta", padding=(0, 2)))
+    if skills:
+        table = Table(title="Skills Sugeridas por Grok", show_lines=False)
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Agent", style="cyan")
+        table.add_column("Skill", style="yellow")
+        table.add_column("Reason", style="white")
+        for i, s in enumerate(skills[:10], 1):
+            table.add_row(str(i), s.get("agent", ""), s.get("skill", ""), s.get("reason", s.get("description", ""))[:80])
+        console.print(table)
+    else:
+        console.print("[yellow]Nenhuma skill mapeada — Grok não conseguiu mapear requisitos. Tente ser mais específico.[/yellow]")
+
+    if evaluate_only:
+        console.print("\n[dim]Avaliação concluída (--evaluate). Nenhum arquivo foi escrito.[/dim]\n")
+        return
+
+    if not skills:
+        raise typer.Exit(0)
+
+    # Confirmação
+    from rich.prompt import Confirm
+    if not yes:
+        proceed = Confirm.ask("\n[yellow]Aplicar essas mudanças?[/yellow]", default=False)
+        if not proceed:
+            console.print("[dim]Operação cancelada.[/dim]")
+            raise typer.Exit(0)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Aplicando melhorias com Grok + Skills...", total=None)
+        try:
+            exec_result = client.grok_improve(instruction=instruction, project_context=project_context, execute=True)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]✗[/bold red] Grok improve falhou: {e}")
+            raise typer.Exit(1)
+        progress.update(task, description="Escrevendo arquivos...")
+        artifacts = exec_result.get("artifacts", [])
+        if artifacts:
+            written = agent.write_artifacts(artifacts, output_path)
+        else:
+            written = []
+        progress.stop()
+
+    console.print(f"\n[bold green]✓[/bold green] {exec_result.get('summary', 'Melhorias aplicadas')}")
+    if written:
+        console.print(f"[dim]{len(written)} arquivo(s) escritos em {output_path}[/dim]")
+        for f in written:
+            console.print(f"  [green]•[/green] {f}")
+    if exec_result.get("errors"):
+        console.print("\n[yellow]Avisos:[/yellow]")
+        for err in exec_result["errors"]:
+            console.print(f"  [dim]• {err}[/dim]")
+    console.print()
+
+
+@app.command()
 def version():
     """Show CLI version and API status."""
     client = AgentsClient()
-    console.print(f"[bold cyan]Agents CLI[/bold cyan] v{CLI_VERSION}")
+    console.print(f"[bold cyan]Agents CLI[/bold cyan] v{CLI_VERSION} [dim](Grok + Skills)[/dim]")
     console.print(f"Platform: [dim]{platform.system()} {platform.machine()}[/dim]")
 
     try:
         health = client.health()
-        console.print(f"API: [bold green]online[/bold green] — {health.get('skills_registered', 0)} skills registered")
+        console.print(f"API: [bold green]online[/bold green] — {health.get('skills_registered', 0)} skills registered — provider: {health.get('llm_provider', health.get('provider', 'unknown'))} Grok-forced={health.get('grok_forced', False)}")
+        # Tenta também /llm/grok/status
+        try:
+            grok = client.grok_status()
+            console.print(f"Grok: [dim]{'configurado e forçado' if grok.get('grok_configured') else 'não configurado (fallback HF)'} — model={grok.get('model', 'none')}[/dim]")
+        except Exception:
+            pass
     except Exception:
         console.print("API: [bold red]unreachable[/bold red]")
 

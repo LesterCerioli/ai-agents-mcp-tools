@@ -16,7 +16,36 @@ Resources:
 import json
 from typing import Any, TYPE_CHECKING
 
-from mcp.server import FastMCP
+try:
+    from mcp.server import FastMCP
+except ImportError:
+    try:
+        from mcp.server.fastmcp import FastMCP
+    except ImportError:
+        try:
+            from fastmcp import FastMCP
+        except ImportError:
+            import logging as _log
+            _log.getLogger(__name__).warning('FastMCP nao disponivel — MCP stub')
+            class _StubMCP:
+                def __init__(self, name: str):
+                    self.name = name
+                def resource(self, uri: str):
+                    def decorator(fn):
+                        return fn
+                    return decorator
+                def tool(self):
+                    def decorator(fn):
+                        return fn
+                    return decorator
+                def sse_app(self):
+                    from starlette.responses import JSONResponse
+                    from starlette.routing import Route
+                    from starlette.applications import Starlette
+                    async def stub(request):
+                        return JSONResponse({'error': 'MCP stub — FastMCP nao instalado'})
+                    return Starlette(routes=[Route('/{path:path}', endpoint=stub)])
+            FastMCP = _StubMCP
 
 from app.architecture.schemas.workflow import WorkflowScope
 

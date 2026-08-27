@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
 from app.architecture.schemas.requirements import ArchitectureRequirements
@@ -280,6 +282,7 @@ def _testing_strategy(primary_domain: str, driven_ports: list[HexagonalPort]) ->
 class HexagonalDesignPartnerAgent(BaseArchitectureAgent):
 
     name = "hexagonal_design_partner"
+    capabilities: ClassVar[list[str]] = ["hexagonal_design"]
     description = (
         "Produces a full hexagonal (ports-and-adapters) architecture design from a solution "
         "flow diagram, architecture decision, and requirements. Identifies the Application Core "

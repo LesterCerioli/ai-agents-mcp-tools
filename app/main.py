@@ -8,12 +8,17 @@ import os
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
+
+import swagger_ui
 
 from app.architecture.schemas.feedback import FeedbackProcessingResult
 
 load_dotenv()
+
+_swagger_static_dir = os.path.join(os.path.dirname(swagger_ui.__file__), "static")
 
 logger = logging.getLogger(__name__)
 
@@ -38,28 +43,31 @@ async def _get_or_create_session(session_id: str | None, pipeline_context_cls: t
         return sid, _session_locks[sid]
 
 
+_llm_provider_label = "none"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _orchestrator, _workflow_coordinator, _feedback_engine, _go_llm
-    from app.llm.huggingface import HuggingFaceProvider
+    global _orchestrator, _workflow_coordinator, _feedback_engine, _go_llm, _llm_provider_label
     from app.agents.orchestrator import AgentOrchestrator
     from app.architecture.workflow_coordinator import WorkflowCoordinator
     from app.architecture.feedback.engine import FeedbackEngine
+    from app.llm.factory import create_llm_providers
 
-    token = os.getenv("HUGGINGFACE_TOKEN")
-    model = os.getenv("LLM_MODEL_1")
-    go_model = os.getenv("LLM_MODEL_GO")
-
-    llm = HuggingFaceProvider(token=token, model=model) if token else None
-    _go_llm = HuggingFaceProvider(token=token, model=go_model) if token and go_model else llm
+    llm, go_llm, label = create_llm_providers()
+    _llm_provider_label = label
+    _go_llm = go_llm
     _orchestrator = AgentOrchestrator(llm=llm, go_llm=_go_llm)
     _workflow_coordinator = WorkflowCoordinator(orchestrator=_orchestrator, llm=llm)
     _feedback_engine = FeedbackEngine(coordinator=_workflow_coordinator)
 
-    go_label = go_model if go_model else "fallback to LLM_MODEL_1"
-    print(f"[OK] Agents ready -- LLM: {'enabled (' + (model or 'default') + ')' if token else 'disabled (no token)'}")
-    print(f"[OK] Go agent LLM: {go_label if token else 'disabled (no token)'}")
-    print(f"[OK] MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns, /mcp/quality-assessment")
+    if llm is None:
+        print("[OK] Agents ready -- LLM: disabled (no GROCK_API_TOKEN / HUGGINGFACE_TOKEN)")
+        print("[WARN] Configure GROCK_API_TOKEN para ativar geração Grok + skills")
+    else:
+        # Nunca expor token, só label
+        print(f"[OK] Agents ready -- LLM: enabled ({label}) [FORÇADO Grok quando GROCK_API_TOKEN presente]")
+        print(f"[OK] Go agent LLM: {go_llm.model if hasattr(go_llm, 'model') else 'same'}")
+    print(f"[OK] MCP servers mounted at /mcp/architecture, /mcp/backend, /mcp/frontend, /mcp/orchestrate, /mcp/solid, /mcp/design-patterns, /mcp/quality-assessment, /mcp/grok")
     yield
 
 
@@ -67,11 +75,84 @@ app = FastAPI(
     title="Enterprise AI Agents",
     description=(
         "AI Agents with specialized Next.js, Design, Frontend, Vercel, and Backend skills. "
-        "Full workflow orchestration via REST API and MCP servers."
+        "Full workflow orchestration via REST API and MCP servers. "
+        "LLM: Grok (xAI) forçado via GROCK_API_TOKEN + Skills."
     ),
-    version="0.2.0",
+    version="0.4.0",
     lifespan=lifespan,
+    docs_url=None,      # Desabilita /docs padrão
+    redoc_url=None,     # Desabilita /redoc padrão
 )
+
+# Monta static files do swagger-ui local (offline)
+app.mount("/static/swagger-ui", StaticFiles(directory=_swagger_static_dir), name="swagger-ui-static")
+
+# Swagger UI 100% offline - template customizado
+_DOCS_HTML = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise AI Agents - Swagger UI</title>
+    <link rel="stylesheet" type="text/css" href="/static/swagger-ui/swagger-ui.css" />
+    <link rel="icon" type="image/png" href="/static/swagger-ui/favicon-32x32.png" />
+    <style>
+        html, body, #swagger-ui {{ margin: 0; padding: 0; height: 100vh; width: 100%; }}
+        .topbar {{ display: none; }}
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="/static/swagger-ui/swagger-ui-bundle.js" crossorigin></script>
+    <script src="/static/swagger-ui/swagger-ui-standalone-preset.js" crossorigin></script>
+    <script>
+        window.onload = function() {{
+            window.ui = SwaggerUIBundle({{
+                url: '/openapi.json',
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                layout: "BaseLayout",
+                showExtensions: true,
+                showCommonExtensions: true,
+                swaggerUiCss: '/static/swagger-ui/swagger-ui.css',
+                swaggerUiBundleJs: '/static/swagger-ui/swagger-ui-bundle.js',
+                swaggerUiStandalonePresetJs: '/static/swagger-ui/swagger-ui-standalone-preset.js',
+            }});
+        }};
+    </script>
+</body>
+</html>
+"""
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(_DOCS_HTML)
+
+@app.get("/redoc", include_in_schema=False)
+async def custom_redoc_html():
+    from fastapi.responses import HTMLResponse
+    # ReDoc usa template simples que já funciona offline
+    return HTMLResponse("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enterprise AI Agents - ReDoc</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="/static/swagger-ui/favicon-32x32.png" />
+    <style> body { margin: 0; padding: 0; } </style>
+</head>
+<body>
+    <redoc spec-url="/openapi.json"></redoc>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"> </script>
+</body>
+</html>
+""")
 
 app.add_middleware(
     CORSMiddleware,
@@ -202,29 +283,40 @@ async def cli_version():
 
 @app.get("/cli/status", tags=["CLI"])
 async def cli_status():
-    """Check which CLI installers are available for download."""
+    """Check which CLI installers are available for download + Grok provider status."""
     from app.cli.services.linux_installer_service import LinuxInstallerService
     from app.cli.services.windows_installer_service import WindowsInstallerService
+    import os
+    has_grok = bool(os.getenv("GROCK_API_TOKEN") or os.getenv("GROK_API_TOKEN") or os.getenv("XAI_API_KEY"))
     return {
         "linux": LinuxInstallerService().is_available(),
         "windows": WindowsInstallerService().is_available(),
+        "provider": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
+        "grok_configured": has_grok,
+        "grok_forced": has_grok,
+        "mcp_grok": "/mcp/grok",
     }
 
 
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.2.0"}
+    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.4.0", "llm": _llm_provider_label if '_llm_provider_label' in globals() else "unknown", "grok_forced": bool(__import__("os").getenv("GROCK_API_TOKEN") or __import__("os").getenv("GROK_API_TOKEN"))}
 
 
 @app.get("/health", tags=["Health"])
 async def health():
     from app.skills.registry import SkillRegistry
+    import os
+    grok_configured = bool(os.getenv("GROCK_API_TOKEN") or os.getenv("GROK_API_TOKEN") or os.getenv("XAI_API_KEY"))
     return {
         "status": "healthy",
         "skills_registered": len(SkillRegistry.names()),
         "llm_enabled": _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
-        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate", "/mcp/solid", "/mcp/design-patterns", "/mcp/quality-assessment"],
+        "llm_provider": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
+        "grok_configured": grok_configured,
+        "grok_forced": grok_configured,
+        "mcp_servers": ["/mcp/architecture", "/mcp/backend", "/mcp/frontend", "/mcp/orchestrate", "/mcp/solid", "/mcp/design-patterns", "/mcp/quality-assessment", "/mcp/grok"],
     }
 
 
@@ -839,9 +931,12 @@ async def workflow_improve(request: ImproveRequest):
     """
     Improve or extend an existing project from a natural-language instruction.
 
-    The CLI scans the project locally and sends its file structure here.
-    For each matched skill the LLM (HuggingFace) extracts the required params;
-    if the LLM is unavailable the params are inferred from the project context.
+    FORÇADO Grok + Skills:
+      1. Grok avalia projeto existente (estrutura, stack, débito) e mapeia requisitos -> skills.
+      2. BM25 + Grok selecionam skills concretas (agent, skill, params).
+      3. Cada skill é executada com params extraídos por Grok (dual_extractor Grok-first).
+      4. Se skills cobrem pouco da instrução, Grok gera artifact complementar de correção/criação.
+    O GROCK_API_TOKEN é lido do ambiente e nunca exposto.
     """
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
@@ -854,21 +949,65 @@ async def workflow_improve(request: ImproveRequest):
     )
     enriched_task = f"{project_summary} Instruction: {request.instruction}"
 
+    # 1. Grok-first analysis + plan (avalia projeto existente de verdade)
+    grok_plan: dict[str, Any] = {}
+    grok_analysis = ""
+    try:
+        from app.llm.grok_analyzer import grok_analyze_and_plan
+        grok_llm = _orchestrator.agents["nextjs"].llm or _orchestrator.agents["go"].llm if _orchestrator else None
+        grok_plan = await grok_analyze_and_plan(
+            instruction=request.instruction,
+            project_files=request.project_files,
+            project_type=request.project_type,
+            llm=grok_llm,
+            orchestrator=_orchestrator,
+        )
+        grok_analysis = grok_plan.get("analysis", "")
+        logger.info("workflow/improve Grok plan source=%s skills=%s", grok_plan.get("source"), len(grok_plan.get("skills", [])))
+    except Exception as exc:
+        logger.debug("Grok analyze fallback: %s", exc)
+
+    # 2. Determina plan final: prefere Grok quando útil, senão BM25
     plan = await _orchestrator.plan(enriched_task)
+    # Se Grok sugeriu skills válidas, mescla (prioriza Grok, completa com BM25 se menos de 3)
+    candidate_tasks: list[dict[str, Any]] = []
+    if grok_plan.get("skills"):
+        seen = set()
+        for item in grok_plan["skills"]:
+            key = (item.get("agent"), item.get("skill"))
+            if key not in seen and item.get("agent") in _orchestrator.agents:
+                candidate_tasks.append(item)
+                seen.add(key)
+        # Complementa com BM25 se Grok sugeriu poucas
+        if len(candidate_tasks) < 2:
+            for t in plan.tasks:
+                key = (t.get("agent"), t.get("skill"))
+                if key not in seen:
+                    candidate_tasks.append(t)
+                    seen.add(key)
+        plan_analysis = grok_analysis or plan.analysis
+    else:
+        candidate_tasks = plan.tasks
+        plan_analysis = plan.analysis
+
     go_ctx = _parse_go_context(request.project_files)
 
     _hf_token = os.getenv("HUGGINGFACE_TOKEN", "")
     _model_1 = os.getenv("LLM_MODEL_1", "")
     _model_2 = os.getenv("LLM_MODEL_2", "")
     _model_go = os.getenv("LLM_MODEL_GO", "")
+    # Grok token não é logado — só checado se existe para forçar uso
+    _has_grok = bool(os.getenv("GROCK_API_TOKEN") or os.getenv("GROK_API_TOKEN") or os.getenv("XAI_API_KEY"))
 
     all_artifacts = []
     errors: list[str] = []
     summaries: list[str] = []
 
-    for task_spec in plan.tasks:
+    for task_spec in candidate_tasks[:10]:
         agent_name = task_spec.get("agent", "")
         skill_name = task_spec.get("skill", "")
+        # Se Grok já forneceu params, usa-os como base
+        prefetched_params = task_spec.get("params") if isinstance(task_spec.get("params"), dict) else {}
 
         if agent_name not in _orchestrator.agents:
             errors.append(f"Unknown agent: {agent_name}")
@@ -877,31 +1016,62 @@ async def workflow_improve(request: ImproveRequest):
         agent = _orchestrator.agents[agent_name]
 
         try:
-            params: dict[str, Any] = {}
+            params: dict[str, Any] = dict(prefetched_params) if prefetched_params else {}
 
-            primary_model = _model_go if (agent_name == "go" and _model_go) else _model_1
+            # Se ainda sem params suficientes, tenta Grok-first dual extractor
+            if not params or any(not str(v).strip() for v in params.values()):
+                # Tenta Grok direto primeiro
+                if _has_grok:
+                    try:
+                        from app.llm.dual_extractor import extract_params_grok
+                        skill_obj = agent.get_skill(skill_name)
+                        required = [p for p in skill_obj.schema()["parameters"] if p.get("required", True)]
+                        if required:
+                            extracted = await extract_params_grok(
+                                skill_name=skill_name,
+                                task=enriched_task,
+                                required_params=required,
+                                system_prompt=agent.system_prompt,
+                            )
+                            if extracted:
+                                # Merge: prefetched + extracted, prefetched tem prioridade
+                                for k, v in extracted.items():
+                                    if k not in params or not str(params[k]).strip():
+                                        params[k] = v
+                    except Exception:
+                        pass
 
-            if _hf_token and primary_model and _model_2:
-                try:
-                    from app.llm.dual_extractor import extract_params_dual
-                    skill_obj = agent.get_skill(skill_name)
-                    required = [p for p in skill_obj.schema()["parameters"] if p.get("required", True)]
-                    extracted = await extract_params_dual(
-                        skill_name=skill_name,
-                        task=enriched_task,
-                        required_params=required,
-                        system_prompt=agent.system_prompt,
-                        token=_hf_token,
-                        model_1=primary_model,
-                        model_2=_model_2,
-                    )
-                    if extracted:
-                        params = extracted
-                except Exception:
-                    pass
+                # Fallback dual HF (também tenta Grok internamente)
+                if (not params or len(params) < 1) and _hf_token and (_model_1 or _model_2):
+                    try:
+                        from app.llm.dual_extractor import extract_params_dual
+                        skill_obj = agent.get_skill(skill_name)
+                        required = [p for p in skill_obj.schema()["parameters"] if p.get("required", True)]
+                        primary_model = _model_go if (agent_name == "go" and _model_go) else _model_1
+                        extracted = await extract_params_dual(
+                            skill_name=skill_name,
+                            task=enriched_task,
+                            required_params=required,
+                            system_prompt=agent.system_prompt,
+                            token=_hf_token,
+                            model_1=primary_model or _model_1,
+                            model_2=_model_2,
+                        )
+                        if extracted:
+                            for k, v in extracted.items():
+                                if k not in params or not str(params[k]).strip():
+                                    params[k] = v
+                    except Exception:
+                        pass
 
             if not params:
                 params = _fallback_params(skill_name, request.instruction, go_ctx)
+            else:
+                # Completa params faltantes com fallback
+                fb = _fallback_params(skill_name, request.instruction, go_ctx)
+                for k, v in fb.items():
+                    if k not in params or not str(params[k]).strip():
+                        params[k] = v
 
             skill_result = await agent.execute_skill(skill_name, **params)
             all_artifacts.extend(skill_result.artifacts)
@@ -914,11 +1084,41 @@ async def workflow_improve(request: ImproveRequest):
         except Exception as exc:
             errors.append(f"{agent_name}.{skill_name}: {exc}")
 
+    # 4. Se pouca cobertura, gera artifact complementar via Grok (avalia + corrige)
+    if len(all_artifacts) < 3:
+        try:
+            from app.llm.grok_analyzer import grok_fix_project_files
+            grok_llm = _orchestrator.agents["nextjs"].llm or _orchestrator.agents["go"].llm if _orchestrator else None
+            extras = await grok_fix_project_files(
+                instruction=request.instruction,
+                project_files=request.project_files,
+                project_type=request.project_type,
+                llm=grok_llm,
+            )
+            for art in extras:
+                # Art já é dict com filename/content/language
+                from app.skills.base import CodeArtifact
+                # Evita duplicar filename já gerado
+                existing = {a.filename for a in all_artifacts}
+                if art["filename"] not in existing:
+                    all_artifacts.append(CodeArtifact(
+                        filename=art["filename"],
+                        content=art["content"],
+                        language=art["language"],
+                        description=art["description"],
+                    ))
+                    summaries.append(f"✓ [grok] complement: {art['filename']}")
+        except Exception as exc:
+            logger.debug("Grok complement failed: %s", exc)
+
     return {
         "success": len(errors) == 0,
         "instruction": request.instruction,
         "project_type": request.project_type,
-        "plan": plan.analysis,
+        "plan": plan_analysis,
+        "grok_analysis": grok_analysis,
+        "grok_source": grok_plan.get("source", "none") if grok_plan else "none",
+        "provider": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
         "artifacts": [
             {
                 "filename": a.filename,
@@ -961,6 +1161,149 @@ async def workflow_ask(request: AskRequest):
         raise HTTPException(500, f"Intent routing failed: {e}")
 
     return result
+
+
+# ── Grok-forced workflow helpers ──────────────────────────────────────────
+
+class GrokEvaluateRequest(BaseModel):
+    instruction: str
+    project_files: list[dict[str, Any]] = []
+    project_type: str = "unknown"
+
+
+class GrokImproveRequest(BaseModel):
+    instruction: str
+    project_files: list[dict[str, Any]] = []
+    project_type: str = "unknown"
+    execute: bool = True
+
+
+@app.get("/llm/grok/status", tags=["LLM"])
+async def grok_status():
+    """Retorna status do provider Grok sem expor o token."""
+    import os
+    has_grok = bool(os.getenv("GROCK_API_TOKEN") or os.getenv("GROK_API_TOKEN") or os.getenv("XAI_API_KEY"))
+    from app.llm.grok import GrokProvider
+    is_grok = False
+    model = "none"
+    if _orchestrator and _orchestrator.agents.get("nextjs") and _orchestrator.agents["nextjs"].llm:
+        is_grok = isinstance(_orchestrator.agents["nextjs"].llm, GrokProvider)
+        model = getattr(_orchestrator.agents["nextjs"].llm, "model", "unknown")
+    return {
+        "grok_configured": has_grok,
+        "grok_forced": has_grok,
+        "provider_is_grok": is_grok,
+        "provider_label": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
+        "model": model,
+        "llm_available": _orchestrator is not None and _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
+        "message": "Grok é o LLM principal forçado quando GROCK_API_TOKEN está configurado. Token nunca é exposto.",
+    }
+
+
+@app.post("/workflow/grok/evaluate", tags=["Workflow"])
+async def workflow_grok_evaluate(request: GrokEvaluateRequest):
+    """
+    Avalia projeto existente com Grok + skills (sem executar).
+
+    Usa Grok para entender requisitos e mapear para skills concretas.
+    Útil para inspeção antes de aplicar melhorias.
+    """
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+    from app.llm.grok_analyzer import grok_analyze_and_plan
+    grok_llm = _orchestrator.agents["nextjs"].llm or _orchestrator.agents["go"].llm if _orchestrator else None
+    try:
+        result = await grok_analyze_and_plan(
+            instruction=request.instruction,
+            project_files=request.project_files,
+            project_type=request.project_type,
+            llm=grok_llm,
+            orchestrator=_orchestrator,
+        )
+        return {
+            "success": True,
+            "instruction": request.instruction,
+            "project_type": request.project_type,
+            "provider": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
+            **result,
+        }
+    except Exception as exc:
+        logger.exception("Grok evaluate failed")
+        raise HTTPException(500, f"Grok evaluate failed: {exc}")
+
+
+@app.post("/workflow/grok/improve", tags=["Workflow"])
+async def workflow_grok_improve(request: GrokImproveRequest):
+    """
+    Fluxo Grok completo para projetos existentes: avalia + executa skills + complementa com Grok.
+
+    Se execute=False, só avalia (equivalente a /workflow/grok/evaluate).
+    Se execute=True, executa todas as skills sugeridas e retorna artifacts.
+    """
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+    from app.llm.grok_analyzer import grok_analyze_and_plan, grok_fix_project_files
+
+    grok_llm = _orchestrator.agents["nextjs"].llm or _orchestrator.agents["go"].llm if _orchestrator else None
+    plan = await grok_analyze_and_plan(
+        instruction=request.instruction,
+        project_files=request.project_files,
+        project_type=request.project_type,
+        llm=grok_llm,
+        orchestrator=_orchestrator,
+    )
+    if not request.execute:
+        return {"success": True, "project_type": request.project_type, "execute": False, **plan}
+
+    all_artifacts: list[dict] = []
+    errors: list[str] = []
+    summaries: list[str] = []
+    for spec in plan.get("skills", [])[:8]:
+        agent_name = spec.get("agent", "")
+        skill_name = spec.get("skill", "")
+        params = spec.get("params", {}) if isinstance(spec.get("params"), dict) else {}
+        if agent_name not in _orchestrator.agents:
+            errors.append(f"Unknown agent: {agent_name}")
+            continue
+        try:
+            agent = _orchestrator.agents[agent_name]
+            result = await agent.execute_skill(skill_name, **params)
+            all_artifacts.extend([
+                {"filename": a.filename, "content": a.content, "language": a.language, "description": a.description}
+                for a in result.artifacts
+            ])
+            summaries.append(f"{'✓' if result.success else '✗'} [{agent_name}] {skill_name}: {result.summary}")
+            if not result.success and result.error:
+                errors.append(f"{agent_name}.{skill_name}: {result.error}")
+        except Exception as exc:
+            errors.append(f"{agent_name}.{skill_name}: {exc}")
+
+    if len(all_artifacts) < 2 and grok_llm is not None:
+        try:
+            extras = await grok_fix_project_files(
+                instruction=request.instruction,
+                project_files=request.project_files,
+                project_type=request.project_type,
+                llm=grok_llm,
+            )
+            for art in extras:
+                if art["filename"] not in {a["filename"] for a in all_artifacts}:
+                    all_artifacts.append(art)
+                    summaries.append(f"✓ [grok] complement: {art['filename']}")
+        except Exception as exc:
+            logger.debug("Grok complement in grok/improve failed: %s", exc)
+
+    return {
+        "success": len(errors) == 0,
+        "instruction": request.instruction,
+        "project_type": request.project_type,
+        "provider": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
+        "analysis": plan.get("analysis", ""),
+        "plan_source": plan.get("source", "unknown"),
+        "artifacts": all_artifacts,
+        "errors": errors,
+        "summary": "\n".join(summaries),
+    }
 
 
 @app.post("/workflow/diagnose", tags=["Workflow"])
@@ -1159,45 +1502,101 @@ async def architecture_quality_assessment(request: QualityAssessRequest):
 
 @app.on_event("startup")
 async def mount_mcp_servers():
-    """Mount the MCP SSE servers once agents are ready."""
+    """Mount the MCP SSE servers once agents are ready — robust to FastMCP version mismatches."""
     if _orchestrator is None or _workflow_coordinator is None:
         return
 
-    from app.mcp.architecture_mcp import ArchitectureMCPServer
-    from app.mcp.backend_mcp import BackendMCPServer
-    from app.mcp.frontend_mcp import FrontendMCPServer
-    from app.mcp.orchestrator_mcp import OrchestratorMCPServer
-    from app.mcp.solid_mcp import SOLIDMCPServer
-    from app.mcp.design_pattern_mcp import DesignPatternMCPServer
-    from app.mcp.quality_assessment_mcp import QualityAssessmentMCPServer
-    from app.agents.solid_agent import SOLIDPrinciplesEnforcerAgent
-    from app.agents.design_pattern_agent import DesignPatternRecommenderAgent
-    from app.agents.quality_assessment_agent import ArchitectureQualityAssessmentAgent
-
     llm = _orchestrator.agents["nextjs"].llm if _orchestrator else None
 
-    architecture_server = ArchitectureMCPServer(_architecture_sessions, llm=llm)
-    backend_server = BackendMCPServer(_orchestrator.agents["backend"])
-    frontend_server = FrontendMCPServer(_orchestrator)
-    orchestrator_server = OrchestratorMCPServer(
-        _workflow_coordinator, _orchestrator, _architecture_sessions
-    )
-    solid_agent = _orchestrator.agents["solid"]
-    solid_server = SOLIDMCPServer(_architecture_sessions, solid_agent, llm=llm)
+    # Helper para montar com fallback
+    def _try_mount(path: str, factory, label: str):
+        try:
+            server = factory()
+            app.mount(path, server.sse_app())
+            logger.info("MCP mounted %s at %s", label, path)
+        except Exception as exc:
+            logger.warning("MCP %s mount failed at %s: %s — API direta continua disponível", label, path, exc)
 
-    dp_agent = _orchestrator.agents["design_patterns"]
-    dp_server = DesignPatternMCPServer(_architecture_sessions, dp_agent, llm=llm)
+    # Architecture
+    try:
+        from app.mcp.architecture_mcp import ArchitectureMCPServer
 
-    qa_agent = _orchestrator.agents["quality_assessment"]
-    qa_server = QualityAssessmentMCPServer(_architecture_sessions, qa_agent, llm=llm)
+        _try_mount(
+            "/mcp/architecture",
+            lambda: ArchitectureMCPServer(_architecture_sessions, llm=llm),
+            "architecture",
+        )
+    except Exception as exc:
+        logger.warning("Architecture MCP import failed: %s", exc)
 
-    app.mount("/mcp/architecture", architecture_server.sse_app())
-    app.mount("/mcp/backend", backend_server.sse_app())
-    app.mount("/mcp/frontend", frontend_server.sse_app())
-    app.mount("/mcp/orchestrate", orchestrator_server.sse_app())
-    app.mount("/mcp/solid", solid_server.sse_app())
-    app.mount("/mcp/design-patterns", dp_server.sse_app())
-    app.mount("/mcp/quality-assessment", qa_server.sse_app())
+    try:
+        from app.mcp.backend_mcp import BackendMCPServer
+
+        _try_mount("/mcp/backend", lambda: BackendMCPServer(_orchestrator.agents["backend"]), "backend")
+    except Exception as exc:
+        logger.warning("Backend MCP import failed: %s", exc)
+
+    try:
+        from app.mcp.frontend_mcp import FrontendMCPServer
+
+        _try_mount("/mcp/frontend", lambda: FrontendMCPServer(_orchestrator), "frontend")
+    except Exception as exc:
+        logger.warning("Frontend MCP import failed: %s", exc)
+
+    try:
+        from app.mcp.orchestrator_mcp import OrchestratorMCPServer
+
+        _try_mount(
+            "/mcp/orchestrate",
+            lambda: OrchestratorMCPServer(_workflow_coordinator, _orchestrator, _architecture_sessions),
+            "orchestrate",
+        )
+    except Exception as exc:
+        logger.warning("Orchestrator MCP import failed: %s", exc)
+
+    try:
+        from app.mcp.solid_mcp import SOLIDMCPServer
+
+        solid_agent = _orchestrator.agents["solid"]
+        _try_mount("/mcp/solid", lambda: SOLIDMCPServer(_architecture_sessions, solid_agent, llm=llm), "solid")
+    except Exception as exc:
+        logger.warning("Solid MCP import failed: %s", exc)
+
+    try:
+        from app.mcp.design_pattern_mcp import DesignPatternMCPServer
+
+        dp_agent = _orchestrator.agents["design_patterns"]
+        _try_mount(
+            "/mcp/design-patterns",
+            lambda: DesignPatternMCPServer(_architecture_sessions, dp_agent, llm=llm),
+            "design-patterns",
+        )
+    except Exception as exc:
+        logger.warning("DesignPattern MCP import failed: %s", exc)
+
+    try:
+        from app.mcp.quality_assessment_mcp import QualityAssessmentMCPServer
+
+        qa_agent = _orchestrator.agents["quality_assessment"]
+        _try_mount(
+            "/mcp/quality-assessment",
+            lambda: QualityAssessmentMCPServer(_architecture_sessions, qa_agent, llm=llm),
+            "quality-assessment",
+        )
+    except Exception as exc:
+        logger.warning("QualityAssessment MCP import failed: %s", exc)
+
+    # Grok — sempre tenta montar (tem stub fallback)
+    try:
+        from app.mcp.grok_mcp import GrokMCPServer
+
+        _try_mount(
+            "/mcp/grok",
+            lambda: GrokMCPServer(_orchestrator, _workflow_coordinator, _architecture_sessions, llm=llm),
+            "grok",
+        )
+    except Exception as exc:
+        logger.warning("Grok MCP import failed (API direta ainda disponível em /workflow/grok/*): %s", exc)
 
 
 def cli():
