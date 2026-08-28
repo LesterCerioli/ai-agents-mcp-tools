@@ -1,5 +1,6 @@
 import re
 from collections import defaultdict
+from typing import ClassVar
 
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
@@ -55,6 +56,7 @@ def _mermaid_node(node: DiagramNode) -> str:
 class SolutionFlowDiagramAgent(BaseArchitectureAgent):
     
     name = "solution_flow_diagram"
+    capabilities: ClassVar[list[str]] = ["flow_diagram_generation"]
     description = (
         "Generates context, container, and component architecture flow diagrams "
         "from a SolutionArchitectureDecision, producing Mermaid strings and structured models."

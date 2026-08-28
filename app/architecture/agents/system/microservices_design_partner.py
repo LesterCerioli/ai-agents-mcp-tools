@@ -1,4 +1,5 @@
 import re
+from typing import ClassVar
 
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
@@ -139,6 +140,7 @@ _DATA_RATIONALE: dict[DataDistributionPattern, str] = {
 class MicroservicesDesignPartnerAgent(BaseArchitectureAgent):
 
     name = "microservices_design_partner"
+    capabilities: ClassVar[list[str]] = ["microservices_design"]
     description = (
         "Produces a concrete microservices system design from a solution architecture decision. "
         "Performs DDD-based service decomposition, selects communication patterns, "

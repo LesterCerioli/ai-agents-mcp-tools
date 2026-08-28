@@ -18,6 +18,14 @@ from .quality_assessment import (
     scalability_skill,
     security_skill,
 )
+from .planning import (
+    analyze_requirements,
+    improve_descriptions,
+    generate_user_stories,
+    estimate_effort,
+    identify_dependencies,
+    generate_spec,
+)
 
 __all__ = [
     "BaseSkill",

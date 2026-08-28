@@ -1,6 +1,6 @@
 
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
@@ -176,6 +176,7 @@ def _default_components(domain: str) -> list[DecisionComponent]:
 class SolutionArchitectureDecisionEngine(BaseArchitectureAgent):
     
     name = "solution_architecture_decision_engine"
+    capabilities: ClassVar[list[str]] = ["solution_design", "pattern_selection"]
     description = (
         "Evaluates structured architecture requirements and selects the optimal "
         "solution architecture strategy with trade-off analysis and risk assessment."
