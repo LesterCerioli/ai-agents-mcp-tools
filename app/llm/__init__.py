@@ -1,6 +1,7 @@
 from .base import BaseLLMProvider, LLMMessage, LLMResponse
 from .bm25_index import SkillBM25Index, SkillMatch
 from .grok import GrokProvider, GROK_RECOMMENDED_MODELS
+from .grok_planner import GrokPlanner, ExecutionPlan, PlanStep
 from .huggingface import HuggingFaceProvider, RECOMMENDED_MODELS
 
 try:
@@ -18,6 +19,9 @@ __all__ = [
     "SkillMatch",
     "HuggingFaceProvider",
     "GrokProvider",
+    "GrokPlanner",
+    "ExecutionPlan",
+    "PlanStep",
     "GROK_RECOMMENDED_MODELS",
     "RECOMMENDED_MODELS",
     "NEXTJS_EXPERT",

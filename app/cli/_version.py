@@ -5,4 +5,4 @@
 # The server reads this same file (it ships with every deploy) to answer
 # GET /cli/version, so the binary built from a given commit and the API
 # deployed from that same commit always agree on what "latest" means.
-CLI_VERSION = "0.4.0"
+CLI_VERSION = "0.5.0"

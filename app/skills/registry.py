@@ -1,13 +1,12 @@
 from typing import Any, TYPE_CHECKING
-from .base import BaseSkill, SkillCategory
+from .base import BaseSkill, SkillCategory, SkillMetadata, SkillDomain, SkillComplexity
 
 if TYPE_CHECKING:
     from app.llm.base import BaseLLMProvider
 
 
 class SkillRegistry:
-    """Central registry for all agent skills."""
-
+    
     _skill_classes: dict[str, type[BaseSkill]] = {}
 
     @classmethod
@@ -41,6 +40,19 @@ class SkillRegistry:
             for sc in cls._skill_classes.values()
             if tag in sc.tags
         ]
+
+    @classmethod
+    def list_by_domain(cls, domain: SkillDomain) -> list[dict[str, Any]]:
+        return [
+            sc(llm=None).schema()
+            for sc in cls._skill_classes.values()
+            if sc(llm=None).metadata.domain == domain
+        ]
+
+    @classmethod
+    def list_for_planner(cls) -> list[dict[str, Any]]:
+        """Returns all skills with full metadata for the Grok planner."""
+        return [sc(llm=None).schema() for sc in cls._skill_classes.values()]
 
     @classmethod
     def instantiate_all(cls, category: SkillCategory, llm: "BaseLLMProvider | None" = None) -> list[BaseSkill]:

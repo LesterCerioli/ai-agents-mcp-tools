@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 from dotenv import load_dotenv
 
-# Carrega .env para CLI local sem binário baked (GROCK_API_TOKEN, AGENTS_API_URL, etc.)
+# Load .env for local CLI without baked binary (GROCK_API_TOKEN, AGENTS_API_URL, etc.)
 load_dotenv()
 
 try:
@@ -148,7 +148,7 @@ class AgentsClient:
 
     # ── Grok-forced helpers ──────────────────────────────────────────────
     def grok_status(self) -> dict[str, Any]:
-        """Retorna status Grok sem expor token."""
+        """Return Grok status without exposing token."""
         with httpx.Client(timeout=10.0) as c:
             r = c.get(f"{self._base}/llm/grok/status")
             r.raise_for_status()
@@ -159,7 +159,7 @@ class AgentsClient:
         instruction: str,
         project_context: dict[str, Any],
     ) -> dict[str, Any]:
-        """Avalia projeto existente via Grok + skills (sem executar)."""
+        """Evaluate existing project via Grok + skills (without executing)."""
         with httpx.Client(timeout=TIMEOUT) as c:
             r = c.post(
                 f"{self._base}/workflow/grok/evaluate",
@@ -178,7 +178,7 @@ class AgentsClient:
         project_context: dict[str, Any],
         execute: bool = True,
     ) -> dict[str, Any]:
-        """Fluxo completo Grok: avalia + executa skills + complementa."""
+        """Full Grok flow: evaluate + execute skills + complement."""
         with httpx.Client(timeout=TIMEOUT) as c:
             r = c.post(
                 f"{self._base}/workflow/grok/improve",
@@ -189,5 +189,42 @@ class AgentsClient:
                     "execute": execute,
                 },
             )
+            r.raise_for_status()
+            return r.json()
+
+    # ── Plan-First (MCP Orchestrator + Grok) ───────────────────────────────
+    def create_execution_plan(
+        self,
+        instruction: str,
+        project_path: str,
+        project_type: str = "auto",
+        max_steps: int = 8,
+    ) -> dict[str, Any]:
+        """Create execution plan via MCP Orchestrator + Grok."""
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/plan/create",
+                json={
+                    "instruction": instruction,
+                    "project_path": project_path,
+                    "project_type": project_type,
+                    "max_steps": max_steps,
+                },
+            )
+            r.raise_for_status()
+            return r.json()
+
+    def approve_plan(self, plan_id: str, approved: bool = True) -> dict[str, Any]:
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(
+                f"{self._base}/workflow/plan/{plan_id}/approve",
+                json={"approved": approved},
+            )
+            r.raise_for_status()
+            return r.json()
+
+    def execute_plan(self, plan_id: str) -> dict[str, Any]:
+        with httpx.Client(timeout=TIMEOUT) as c:
+            r = c.post(f"{self._base}/workflow/plan/{plan_id}/execute")
             r.raise_for_status()
             return r.json()

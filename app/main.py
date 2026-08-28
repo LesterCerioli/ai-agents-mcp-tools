@@ -29,6 +29,9 @@ _go_llm = None
 _architecture_sessions: dict[str, Any] = {}
 _session_locks: dict[str, asyncio.Lock] = {}
 _sessions_creation_lock = asyncio.Lock()
+# Plan-First orchestrator store (MCP + REST share this)
+_execution_plans: dict[str, Any] = {}
+_plan_status: dict[str, dict[str, Any]] = {}
 
 
 async def _get_or_create_session(session_id: str | None, pipeline_context_cls: type) -> tuple[str, asyncio.Lock]:
@@ -78,16 +81,14 @@ app = FastAPI(
         "Full workflow orchestration via REST API and MCP servers. "
         "LLM: Grok (xAI) forçado via GROCK_API_TOKEN + Skills."
     ),
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
     docs_url=None,      # Desabilita /docs padrão
     redoc_url=None,     # Desabilita /redoc padrão
 )
 
-# Monta static files do swagger-ui local (offline)
 app.mount("/static/swagger-ui", StaticFiles(directory=_swagger_static_dir), name="swagger-ui-static")
 
-# Swagger UI 100% offline - template customizado
 _DOCS_HTML = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -136,7 +137,7 @@ async def custom_swagger_ui_html():
 @app.get("/redoc", include_in_schema=False)
 async def custom_redoc_html():
     from fastapi.responses import HTMLResponse
-    # ReDoc usa template simples que já funciona offline
+    
     return HTMLResponse("""
 <!DOCTYPE html>
 <html>
@@ -301,7 +302,7 @@ async def cli_status():
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.4.0", "llm": _llm_provider_label if '_llm_provider_label' in globals() else "unknown", "grok_forced": bool(__import__("os").getenv("GROCK_API_TOKEN") or __import__("os").getenv("GROK_API_TOKEN"))}
+    return {"status": "ok", "service": "Enterprise AI Agents", "version": "0.5.0", "llm": _llm_provider_label if '_llm_provider_label' in globals() else "unknown", "grok_forced": bool(__import__("os").getenv("GROCK_API_TOKEN") or __import__("os").getenv("GROK_API_TOKEN"))}
 
 
 @app.get("/health", tags=["Health"])
@@ -1178,9 +1179,20 @@ class GrokImproveRequest(BaseModel):
     execute: bool = True
 
 
+class PlanCreateRequest(BaseModel):
+    instruction: str
+    project_path: str = "."
+    project_type: str = "auto"
+    max_steps: int = 8
+
+
+class PlanApproveRequest(BaseModel):
+    approved: bool = True
+
+
 @app.get("/llm/grok/status", tags=["LLM"])
 async def grok_status():
-    """Retorna status do provider Grok sem expor o token."""
+    """Return Grok provider status without exposing token."""
     import os
     has_grok = bool(os.getenv("GROCK_API_TOKEN") or os.getenv("GROK_API_TOKEN") or os.getenv("XAI_API_KEY"))
     from app.llm.grok import GrokProvider
@@ -1196,17 +1208,17 @@ async def grok_status():
         "provider_label": _llm_provider_label if '_llm_provider_label' in globals() else "unknown",
         "model": model,
         "llm_available": _orchestrator is not None and _orchestrator.agents["nextjs"].llm is not None if _orchestrator else False,
-        "message": "Grok é o LLM principal forçado quando GROCK_API_TOKEN está configurado. Token nunca é exposto.",
+        "message": "Grok is the primary LLM forced when GROCK_API_TOKEN is configured. Token is never exposed.",
     }
 
 
 @app.post("/workflow/grok/evaluate", tags=["Workflow"])
 async def workflow_grok_evaluate(request: GrokEvaluateRequest):
     """
-    Avalia projeto existente com Grok + skills (sem executar).
+    Evaluate existing project with Grok + skills (without executing).
 
-    Usa Grok para entender requisitos e mapear para skills concretas.
-    Útil para inspeção antes de aplicar melhorias.
+    Uses Grok to understand requirements and map to concrete skills.
+    Useful for inspection before applying improvements.
     """
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
@@ -1235,10 +1247,10 @@ async def workflow_grok_evaluate(request: GrokEvaluateRequest):
 @app.post("/workflow/grok/improve", tags=["Workflow"])
 async def workflow_grok_improve(request: GrokImproveRequest):
     """
-    Fluxo Grok completo para projetos existentes: avalia + executa skills + complementa com Grok.
+    Full Grok flow for existing projects: evaluate + execute skills + complement with Grok.
 
-    Se execute=False, só avalia (equivalente a /workflow/grok/evaluate).
-    Se execute=True, executa todas as skills sugeridas e retorna artifacts.
+    If execute=False, only evaluates (equivalent to /workflow/grok/evaluate).
+    If execute=True, executes all suggested skills and returns artifacts.
     """
     if not _orchestrator:
         raise HTTPException(503, "Service not initialized")
@@ -1303,6 +1315,174 @@ async def workflow_grok_improve(request: GrokImproveRequest):
         "artifacts": all_artifacts,
         "errors": errors,
         "summary": "\n".join(summaries),
+    }
+
+
+# ── Plan-First (MCP Orchestrator + Grok) ──────────────────────────────────
+@app.post("/workflow/plan/create", tags=["Workflow"])
+async def workflow_plan_create(request: PlanCreateRequest):
+    """Create execution plan via MCP Orchestrator + Grok. MCP decides skills."""
+    if not _orchestrator:
+        raise HTTPException(503, "Service not initialized")
+    from app.llm.grok_planner import GrokPlanner
+    from app.cli.project_scanner import scan_project
+    import pathlib
+
+    # Resolve project files either from path scan or empty
+    p = pathlib.Path(request.project_path)
+    if p.is_dir():
+        ctx = scan_project(str(p))
+        files = ctx["files"]
+        detected_type = ctx["project_type"]
+    else:
+        files = []
+        detected_type = request.project_type
+    if request.project_type != "auto":
+        detected_type = request.project_type
+
+    grok_llm = _orchestrator.agents["nextjs"].llm or _orchestrator.agents["go"].llm if _orchestrator else None
+    planner = GrokPlanner(grok_provider=grok_llm)
+    try:
+        plan = await planner.create_plan(
+            instruction=request.instruction,
+            project_files=files,
+            project_type=detected_type,
+        )
+    except Exception as exc:
+        logger.exception("Plan creation failed")
+        raise HTTPException(500, f"Plan creation failed: {exc}")
+
+    # Enrich empty params for planning skills using scanned files (so MCP decides, user does not choose)
+    doc_files = [str(p / f["path"]) for f in files if f["path"].endswith((".txt", ".md", ".json"))][:5]
+    if not doc_files and files:
+        doc_files = [str(p / files[0]["path"])]
+    for step in plan.steps:
+        if step.params:
+            continue
+        if step.skill == "planning.analyze_requirements":
+            step.params = {"source_files": doc_files or [str(p / "kanban.txt")]}
+        elif step.skill == "planning.improve_descriptions":
+            step.params = {"source_file": doc_files[0] if doc_files else str(p / "kanban.txt")}
+        elif step.skill == "planning.generate_user_stories":
+            step.params = {"source": doc_files[0] if doc_files else str(p / "kanban.txt")}
+        elif step.skill == "planning.estimate_effort":
+            step.params = {"source_file": doc_files[0] if doc_files else str(p / "kanban.txt")}
+        elif step.skill == "planning.identify_dependencies":
+            step.params = {"source_file": doc_files[0] if doc_files else str(p / "kanban.txt")}
+        elif step.skill == "planning.generate_spec":
+            step.params = {"requirements_file": doc_files[0] if doc_files else ""}
+        elif step.skill.startswith("go.") and not step.params:
+            # minimal go fallback
+            step.params = {"resource": "item", "module_name": "github.com/org/app"}
+
+    # Store for approve/execute
+    _execution_plans[plan.plan_id] = plan
+    _plan_status[plan.plan_id] = {"status": "pending_approval", "current_step": 0, "results": []}
+
+    return {
+        "plan_id": plan.plan_id,
+        "analysis": plan.analysis,
+        "total_steps": len(plan.steps),
+        "estimated_duration_seconds": plan.total_estimated_duration,
+        "steps": [
+            {"step": s.step, "skill": s.skill, "params": s.params, "reason": s.reason, "depends_on": s.depends_on, "confidence": s.confidence}
+            for s in plan.steps
+        ],
+        "status": "pending_approval",
+    }
+
+
+@app.post("/workflow/plan/{plan_id}/approve", tags=["Workflow"])
+async def workflow_plan_approve(plan_id: str, request: PlanApproveRequest):
+    if plan_id not in _execution_plans:
+        raise HTTPException(404, f"Plan {plan_id} not found")
+    if not request.approved:
+        _plan_status[plan_id]["status"] = "rejected"
+        return {"plan_id": plan_id, "status": "rejected"}
+    _plan_status[plan_id]["status"] = "running"
+    _plan_status[plan_id]["current_step"] = 0
+    return {"plan_id": plan_id, "status": "approved"}
+
+
+@app.post("/workflow/plan/{plan_id}/execute", tags=["Workflow"])
+async def workflow_plan_execute(plan_id: str):
+    if plan_id not in _execution_plans:
+        raise HTTPException(404, f"Plan {plan_id} not found")
+    if _plan_status[plan_id].get("status") not in ("running", "pending_approval"):
+        # auto-approve if pending
+        _plan_status[plan_id]["status"] = "running"
+    plan = _execution_plans[plan_id]
+    status = _plan_status[plan_id]
+    current = status.get("current_step", 0)
+    results: list[dict[str, Any]] = status.get("results", [])
+    all_artifacts: list[dict[str, Any]] = []
+
+    for i in range(current, len(plan.steps)):
+        step = plan.steps[i]
+        status["current_step"] = i + 1
+        # dependency check
+        deps_ok = all(
+            any(r.get("step") == d and r.get("success") for r in results)
+            for d in step.depends_on
+        ) if step.depends_on else True
+        if not deps_ok:
+            result = {"step": step.step, "skill": step.skill, "success": False, "error": f"Dependencies not met: {step.depends_on}"}
+        else:
+            try:
+                agent_name = step.skill.split(".")[0]
+                agent = _orchestrator.agents.get(agent_name)
+                if not agent:
+                    raise ValueError(f"Agent {agent_name} not found")
+                skill_result = await agent.execute_skill(step.skill, **step.params)
+                result = {
+                    "step": step.step,
+                    "skill": step.skill,
+                    "success": skill_result.success,
+                    "summary": skill_result.summary,
+                    "artifacts_count": len(skill_result.artifacts),
+                    "error": skill_result.error,
+                }
+                for art in skill_result.artifacts:
+                    all_artifacts.append({"filename": art.filename, "content": art.content, "language": art.language, "description": art.description})
+            except Exception as exc:
+                logger.exception("Step %s failed", step.step)
+                result = {"step": step.step, "skill": step.skill, "success": False, "error": str(exc)}
+        results.append(result)
+        if not result.get("success"):
+            status["status"] = "failed"
+            break
+
+    status["results"] = results
+    if all(r.get("success") for r in results) and len(results) == len(plan.steps):
+        status["status"] = "completed"
+
+    return {
+        "plan_id": plan_id,
+        "status": status["status"],
+        "completed_steps": len([r for r in results if r.get("success")]),
+        "total_steps": len(plan.steps),
+        "results": results,
+        "artifacts": all_artifacts,
+    }
+
+
+@app.get("/workflow/plan/{plan_id}", tags=["Workflow"])
+async def workflow_plan_get(plan_id: str):
+    if plan_id not in _execution_plans:
+        raise HTTPException(404, f"Plan {plan_id} not found")
+    plan = _execution_plans[plan_id]
+    status = _plan_status.get(plan_id, {})
+    return {
+        "plan_id": plan_id,
+        "analysis": plan.analysis,
+        "status": status.get("status", "pending_approval"),
+        "current_step": status.get("current_step", 0),
+        "total_steps": len(plan.steps),
+        "steps": [
+            {"step": s.step, "skill": s.skill, "params": s.params, "reason": s.reason, "depends_on": s.depends_on, "confidence": s.confidence}
+            for s in plan.steps
+        ],
+        "results": status.get("results", []),
     }
 
 
@@ -1543,12 +1723,17 @@ async def mount_mcp_servers():
     except Exception as exc:
         logger.warning("Frontend MCP import failed: %s", exc)
 
+    # Grok provider for planner
+    grok_provider = _orchestrator.agents["nextjs"].llm if _orchestrator else None
+
     try:
         from app.mcp.orchestrator_mcp import OrchestratorMCPServer
 
         _try_mount(
             "/mcp/orchestrate",
-            lambda: OrchestratorMCPServer(_workflow_coordinator, _orchestrator, _architecture_sessions),
+            lambda: OrchestratorMCPServer(
+                _workflow_coordinator, _orchestrator, _architecture_sessions, grok_provider=grok_provider
+            ),
             "orchestrate",
         )
     except Exception as exc:

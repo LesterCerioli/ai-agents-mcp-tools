@@ -398,7 +398,7 @@ def ask(
         def _collect_source_files(error_out: str) -> list[dict[str, str]]:
             priority_names = {"go.mod", "go.sum", "Dockerfile", "docker-compose.yml", "docker-compose.yaml"}
             priority = [f for f in all_files if f.get("path", "") in priority_names]
-            # Always include cmd/*.go so the skill knows where main.go lives
+            
             cmd_go = [
                 f for f in all_files
                 if f.get("path", "").startswith("cmd/") and f.get("path", "").endswith(".go")
@@ -646,7 +646,7 @@ def diagnose(
         console.print(f"[bold red]✗[/bold red] Path not found: {project_path}")
         raise typer.Exit(1)
 
-    # Auto-detect language from project structure
+    
     detected_lang = language
     if not detected_lang:
         if (project_path / "go.mod").exists():
@@ -669,7 +669,7 @@ def diagnose(
         raise typer.Exit(1)
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
-        # Step 1: Run build command to capture errors
+        
         task = progress.add_task("Running build to capture errors...", total=None)
         error_output = ""
 
@@ -703,16 +703,16 @@ def diagnose(
         progress.update(task, description="Scanning project files...")
         project_context = scan_project(str(project_path))
 
-        # Step 2: Filter to files referenced in error output (or all if small project)
+        
         all_files = project_context.get("files", [])
         error_files = [
             f for f in all_files
             if f.get("path", "") in error_output or error_output.count(f.get("path", "xx")) > 0
         ]
-        # Fallback: send all source files (up to 20)
+        
         source_files = error_files if error_files else all_files[:20]
 
-        # Format for API: list of {path, content}
+        
         api_files = [
             {"path": f["path"], "content": f.get("content") or ""}
             for f in source_files
@@ -852,9 +852,8 @@ def update(
             try:
                 os.replace(tmp_path, current_exe)
             except OSError:
-                # Covers both PermissionError (e.g. /usr/local/bin not writable)
-                # and cross-device rename failures when the temp file fell back
-                # to a different filesystem than current_exe's directory.
+                
+                
                 progress.stop()
                 console.print(f"[yellow]![/yellow] Could not replace {current_exe} directly — retrying with sudo...")
                 rc = subprocess.run(["sudo", "mv", str(tmp_path), str(current_exe)]).returncode
@@ -862,9 +861,7 @@ def update(
                     console.print("[bold red]✗[/bold red] Update failed.")
                     raise typer.Exit(1)
         else:
-            # Windows refuses to overwrite a running .exe. Stage the new binary
-            # next to the current one and finish the swap with a short-lived
-            # detached helper once this process exits.
+            
             staged = current_exe.with_name(current_exe.stem + ".new.exe")
             tmp_path.replace(staged)
             subprocess.Popen(
@@ -1157,7 +1154,7 @@ def nextjs(
     if description:
         params["description"] = description
 
-    # Pass through any extra kwargs
+    
     for k, v in kwargs.items():
         if v is not None:
             params[k] = v
@@ -1424,7 +1421,7 @@ def grok(
     if not skills:
         raise typer.Exit(0)
 
-    # Confirmação
+    
     from rich.prompt import Confirm
     if not yes:
         proceed = Confirm.ask("\n[yellow]Aplicar essas mudanças?[/yellow]", default=False)
@@ -1457,6 +1454,155 @@ def grok(
         console.print("\n[yellow]Avisos:[/yellow]")
         for err in exec_result["errors"]:
             console.print(f"  [dim]• {err}[/dim]")
+    console.print()
+
+
+
+@app.command()
+def plan(
+    instruction: str = typer.Argument(..., help="Describe what to plan/implement (EN)"),
+    path: str | None = typer.Option(None, "--path", "-p", help="Project path (default: current dir)"),
+    project_type: str = typer.Option("auto", "--type", "-t", help="Project type: go | nextjs | python | node | auto"),
+    max_steps: int = typer.Option(8, "--max-steps", help="Max steps in plan"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Approve and execute automatically"),
+    api_url: str | None = typer.Option(None, "--api-url", hidden=True),
+):
+    """
+    Plan and execute complex tasks using Grok + Skills (Plan-First).
+
+    MCP analyzes the project, Grok creates an ordered execution plan,
+    shows it for approval, and executes step by step.
+
+    Examples:
+      agents plan "read kanban.txt and improve card descriptions" --path ./project
+      agents plan "create REST API for orders with JWT auth" --path ./api --type go
+      agents plan "refactor React component to Server Components" --path ./web --type nextjs
+      agents plan "generate full technical spec for project" --path . --yes
+    """
+    from app.cli.project_scanner import scan_project
+    from rich.panel import Panel
+    from rich.prompt import Confirm
+
+    client = AgentsClient(base_url=api_url) if api_url else AgentsClient()
+
+    project_path = Path(path or os.getcwd()).resolve()
+    if not project_path.is_dir():
+        console.print(f"[bold red]Error[/bold red] Path not found: {project_path}")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold cyan]Plan-First (Grok + Skills)[/bold cyan] — [dim]{project_path.name}[/dim]")
+    console.print(f"[dim]Instruction: {instruction}[/dim]")
+    console.print()
+
+    try:
+        client.health()
+    except Exception:
+        console.print("[bold red]Error[/bold red] Could not reach the Agents API. Check your connection.")
+        raise typer.Exit(1)
+
+    try:
+        grok_info = client.grok_status()
+        provider = grok_info.get("provider_label", grok_info.get("model", "unknown"))
+        grok_forced = grok_info.get("grok_forced", False)
+        console.print(f"[dim]Grok forced: {grok_forced} — provider: {provider}[/dim]\n")
+    except Exception:
+        pass
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Scanning project...", total=None)
+        project_context = scan_project(str(project_path))
+        progress.update(task, description=f"Scanned {project_context['file_count']} files ({project_context['project_type']}) — Creating plan with Grok...")
+
+        try:
+            plan_result = client.create_execution_plan(
+                instruction=instruction,
+                project_path=str(project_path),
+                project_type=project_type,
+                max_steps=max_steps,
+            )
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]Error[/bold red] Failed to create plan: {e}")
+            raise typer.Exit(1)
+        progress.stop()
+
+    if "error" in plan_result:
+        console.print(f"[bold red]Error[/bold red] {plan_result['error']}")
+        raise typer.Exit(1)
+
+    plan_id = plan_result.get("plan_id")
+    analysis = plan_result.get("analysis", "")
+    steps = plan_result.get("steps", [])
+
+    if analysis:
+        console.print(Panel(analysis[:2000], title="[bold]Grok Analysis[/bold]", border_style="magenta", padding=(0, 2)))
+
+    if steps:
+        table = Table(title=f"Execution Plan ({len(steps)} steps)", show_lines=False)
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Skill", style="cyan")
+        table.add_column("Params", style="yellow")
+        table.add_column("Reason", style="white")
+        table.add_column("Depends On", style="dim", width=10)
+        table.add_column("Conf", style="green", width=6)
+        for step in steps:
+            params_str = str(step.get("params", {}))[:60]
+            deps = ", ".join(map(str, step.get("depends_on", []))) or "-"
+            conf = f"{step.get('confidence', 0):.0%}"
+            table.add_row(str(step.get("step", "")), step.get("skill", ""), params_str, step.get("reason", "")[:60], deps, conf)
+        console.print(table)
+    else:
+        console.print("[yellow]No steps generated in plan.[/yellow]")
+        raise typer.Exit(0)
+
+    if not yes:
+        proceed = Confirm.ask("\n[yellow]Approve and execute this plan?[/yellow]", default=True)
+        if not proceed:
+            console.print("[dim]Operation cancelled.[/dim]")
+            raise typer.Exit(0)
+
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Executing plan...", total=None)
+
+        try:
+            approve_result = client.approve_plan(plan_id=plan_id, approved=True)
+            if "error" in approve_result:
+                raise Exception(approve_result["error"])
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]Error[/bold red] Failed to approve plan: {e}")
+            raise typer.Exit(1)
+
+        progress.update(task, description="Executing steps...")
+
+        try:
+            exec_result = client.execute_plan(plan_id=plan_id)
+        except Exception as e:
+            progress.stop()
+            console.print(f"[bold red]Error[/bold red] Execution failed: {e}")
+            raise typer.Exit(1)
+
+        progress.stop()
+
+    exec_status = exec_result.get("status", "unknown")
+    results = exec_result.get("results", [])
+    completed = exec_result.get("completed_steps", 0)
+    total = exec_result.get("total_steps", len(results))
+
+    status_color = "green" if exec_status == "completed" else "red"
+    console.print(f"\n[bold {status_color}]\u25cf[/] Status: {exec_status.upper()} ({completed}/{total} steps)")
+
+    for r in results:
+        status_icon = "\u2713" if r.get("success") else "\u2717"
+        color = "green" if r.get("success") else "red"
+        step = r.get("step", "")
+        skill = r.get("skill", "")
+        summary = r.get("summary", r.get("error", ""))[:80]
+        console.print(f"  [{color}]{status_icon}[/{color}] Step {step}: {skill} — {summary}")
+
+    if exec_result.get("artifacts"):
+        console.print(f"\n[dim]{len(exec_result['artifacts'])} artifacts generated[/dim]")
+
     console.print()
 
 
