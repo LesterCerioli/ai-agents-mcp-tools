@@ -36,7 +36,7 @@ class SkillComplexity(str, Enum):
 
 
 @dataclass
-clas
+class SkillMetadata:
     domain: SkillDomain = SkillDomain.CODE
     complexity: SkillComplexity = SkillComplexity.MEDIUM
     inputs: list[str] = field(default_factory=list)      
