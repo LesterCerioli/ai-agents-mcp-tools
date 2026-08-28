@@ -53,22 +53,20 @@ COPY . .
 RUN chmod -R 755 /app && \
     chown -R appuser:appuser /app
 
-ENV AGENT_API_URL="" \
+ENV AGENTS_API_URL="" \
     API_BASE_URL="" \
-    GROCK_API_TOKEN="" \
-    GROK_MODEL="grok-3" \
-    GROK_API_BASE_URL="https://api.x.ai/v1" \
     HUGGINGFACE_TOKEN="" \
     LLM_MODEL_1="" \
     LLM_MODEL_2="" \
     LLM_MODEL_GO="" \
     API_HOST="" \
-    API_PORT=""
+    API_DEBUG="" \
+    GROCK_API_TOKEN=""
 
     
 
-EXPOSE 6000
+EXPOSE 8000
 
 USER appuser
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "6000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

