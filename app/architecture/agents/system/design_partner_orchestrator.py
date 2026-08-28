@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.agents.system.hexagonal_design_partner import HexagonalDesignPartnerAgent
 from app.architecture.agents.system.microservices_design_partner import MicroservicesDesignPartnerAgent
@@ -21,6 +23,12 @@ _MONOLITH_PATTERNS = {
 class DesignPartnerOrchestrator(BaseArchitectureAgent):
 
     name = "design_partner_orchestrator"
+    capabilities: ClassVar[list[str]] = [
+        "system_design",
+        "microservices_design",
+        "monolith_design",
+        "hexagonal_design",
+    ]
     description = (
         "Selects and activates the correct system architecture design partner based on the "
         "primary pattern from the solution architecture decision. "

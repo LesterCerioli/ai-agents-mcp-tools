@@ -18,8 +18,7 @@ class LLMResponse:
 
 
 class BaseLLMProvider(ABC):
-    """Abstract interface for LLM providers."""
-
+    
     @abstractmethod
     async def complete(
         self,

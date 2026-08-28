@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
 from app.architecture.schemas.requirements import ArchitectureRequirements
@@ -89,6 +91,7 @@ _STRATEGY_RATIONALE: dict[MonolithLayering, str] = {
 class MonolithDesignPartnerAgent(BaseArchitectureAgent):
 
     name = "monolith_design_partner"
+    capabilities: ClassVar[list[str]] = ["monolith_design"]
     description = (
         "Produces a monolith system design from a solution architecture decision. "
         "Chooses the optimal intra-monolith layering strategy (layered / modular / vertical slices), "

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field
 from enum import Enum
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from app.llm.base import BaseLLMProvider
@@ -18,6 +18,32 @@ class SkillCategory(str, Enum):
     SOLID = "solid"
     DESIGN_PATTERNS = "design_patterns"
     QUALITY_ASSESSMENT = "quality_assessment"
+    PLANNING = "planning"
+
+
+class SkillDomain(str, Enum):
+    CODE = "code"
+    PLANNING = "planning"
+    DIAGNOSTIC = "diagnostic"
+    DOCS = "docs"
+    ARCHITECTURE = "architecture"
+
+
+class SkillComplexity(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+@dataclass
+clas
+    domain: SkillDomain = SkillDomain.CODE
+    complexity: SkillComplexity = SkillComplexity.MEDIUM
+    inputs: list[str] = field(default_factory=list)      
+    outputs: list[str] = field(default_factory=list)     
+    prerequisites: list[str] = field(default_factory=list)  
+    tags: list[str] = field(default_factory=list)        
+    estimated_duration_seconds: int = 30
 
 
 @dataclass
@@ -61,15 +87,20 @@ class BaseSkill(ABC):
     category: SkillCategory
     parameters: list[SkillParameter] = []
     tags: list[str] = []
+    # Rich metadata for planning/orchestration
+    metadata: SkillMetadata = field(default_factory=SkillMetadata)
 
     def __init__(self, llm: "BaseLLMProvider | None" = None):
         self.llm = llm
+        
+        if isinstance(self.metadata, Field):
+            self.metadata = SkillMetadata()
 
     @abstractmethod
     async def execute(self, **kwargs: Any) -> SkillResult: ...
 
     def schema(self) -> dict[str, Any]:
-        return {
+        base = {
             "name": self.name,
             "description": self.description,
             "category": self.category.value,
@@ -86,6 +117,17 @@ class BaseSkill(ABC):
                 for p in self.parameters
             ],
         }
+        
+        base["metadata"] = {
+            "domain": self.metadata.domain.value,
+            "complexity": self.metadata.complexity.value,
+            "inputs": self.metadata.inputs,
+            "outputs": self.metadata.outputs,
+            "prerequisites": self.metadata.prerequisites,
+            "tags": self.metadata.tags,
+            "estimated_duration_seconds": self.metadata.estimated_duration_seconds,
+        }
+        return base
 
     def __repr__(self) -> str:
         return f"<Skill {self.name} [{self.category.value}]>"

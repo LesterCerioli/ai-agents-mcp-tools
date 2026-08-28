@@ -59,6 +59,8 @@ agents version
 | Command | What it does |
 |---------|-------------|
 | [`agents ask`](#agents-ask) | **Main conversational interface.** Understands any natural language request (PT or EN), shows a plan, asks for confirmation, executes, verifies, and suggests next steps. |
+| [`agents plan`](#agents-plan) | **Plan-First orchestrator.** MCP + Grok analyze the project, create an ordered execution plan, show it for approval, then execute step by step. Handles both code and non-code tasks (e.g., kanban refinement). |
+| [`agents grok`](#agents-grok) | Grok-powered evaluator/improver for existing projects (evaluate without writing, or evaluate + write). |
 | [`agents generate`](#agents-generate) | Scaffold a complete new project from a description. |
 | [`agents improve`](#agents-improve) | Add features or apply improvements to an existing project. |
 | [`agents diagnose`](#agents-diagnose) | Explicitly diagnose and fix build/compile/runtime errors. |
@@ -260,10 +262,96 @@ Show the CLI version and verify that the API is reachable.
 
 ```bash
 agents version
-# Agents CLI v0.1.0
+# Agents CLI v0.5.0 (Grok + Skills)
 # Platform: Linux x86_64
-# API: online — 100 skills registered
+# API: online — 124 skills registered — provider: grok:grok-3 Grok-forced=True
+# Grok: configured and forced — model=grok-3
 ```
+
+---
+
+### `agents plan` — Plan-First Execution with MCP + Grok
+
+MCP is the **orchestrator** that decides which skills to use. You never pick skills manually. Grok analyzes the project + instruction, creates an ordered plan, shows it, and only executes after your approval. Works for both **code** (Go, Next.js) and **non-code** (kanban, backlog, requirements, docs).
+
+```bash
+# Non-code: improve kanban/board descriptions (your use case)
+agents plan "read board.txt and improve requirement descriptions" --path .
+agents plan "read kanban.txt and improve card descriptions with acceptance criteria" --path ./project
+
+# Code: create features with plan approval
+agents plan "create REST API for orders with JWT auth" --path ./api --type go
+agents plan "refactor React component to Server Components" --path ./web --type nextjs --max-steps 6
+
+# Auto-approve (CI)
+agents plan "generate full technical spec for project" --path . --yes
+```
+
+**How it works:**
+
+```
+1. scan_project() → {files, project_type, file_count}
+2. POST /workflow/plan/create → GrokPlanner
+   - Builds skill catalog with domain/complexity/inputs/outputs/prerequisites
+   - Grok selects minimal ordered steps (max 8) + infers params from context
+   - Fallback: smart BM25 prefers planning.* when instruction contains kanban/backlog/requirement
+3. CLI shows:
+
+   ╭─ Grok Analysis ───────────────────────────────╮
+   │ Fallback BM25 plan for: read kanban.txt...   │
+   ╰──────────────────────────────────────────────╯
+   ┌─ Execution Plan (5 steps) ──────────────────┐
+   │ # Skill                            Reason    │
+   │ 1 planning.improve_descriptions    BM25 ... │
+   │ 2 planning.analyze_requirements    ...      │
+   │ 3 planning.identify_dependencies   ...      │
+   └─────────────────────────────────────────────┘
+   Approve and execute this plan? [y/N]
+
+4. POST /workflow/plan/{id}/approve → approved
+5. POST /workflow/plan/{id}/execute → runs steps sequentially, checks depends_on, collects artifacts
+6. Writes artifacts to disk via Platform Agent
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path` / `-p` | current dir | Project path to analyze |
+| `--type` / `-t` | `auto` | `go`, `nextjs`, `python`, `node`, or `auto` (detected) |
+| `--max-steps` | `8` | Max steps in plan |
+| `--yes` / `-y` | `false` | Auto-approve and execute |
+
+**Planning skills used (via `planning` agent):**
+
+| Skill | What it does |
+|-------|--------------|
+| `planning.analyze_requirements` | Extracts functional/non-functional requirements, constraints, risks from docs |
+| `planning.improve_descriptions` | Rewrites cards with `Given/When/Then` acceptance criteria + story points |
+| `planning.generate_user_stories` | Converts requirements into INVEST-compliant user stories |
+| `planning.estimate_effort` | Story points / t-shirt sizing + sprint allocation |
+| `planning.identify_dependencies` | Dependency graph + critical path (mermaid/json) |
+| `planning.generate_spec` | Full `SPEC.md` with API contracts, data models, test & rollout plan |
+
+All planning skills work offline (fallback) and with Grok for richer output.
+
+### `agents grok` — Grok Evaluator / Improver
+
+Groq-powered direct evaluator for existing projects. Useful to preview without writing.
+
+```bash
+# Only evaluate (no files written)
+agents grok "evaluate auth module and suggest improvements" --path ./api --evaluate
+
+# Evaluate + apply (with plan preview)
+agents grok "add JWT refresh token and middleware" --path ./go-service
+agents grok "fix build and add tests for payment gateway" --path ./go-service --yes
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path` / `-p` | current dir | Project path |
+| `--output` / `-o` | project path | Where to write generated files |
+| `--evaluate` / `-e` | `false` | Only evaluate, do not execute |
+| `--yes` / `-y` | `false` | Skip confirmation |
 
 ---
 
@@ -397,10 +485,55 @@ CLI → POST /workflow/scaffold
   │  (31 Go skills)  │  FrontendAgent        │
   │                  │  VercelAgent          │
   └──────────────────┴──────────────────────┘
-         │
-         ▼
-  Platform Agent writes every artifact to disk
-  → /path/to/output/order-service/  (32+ files)
+          │
+          ▼
+   Platform Agent writes every artifact to disk
+   → /path/to/output/order-service/  (32+ files)
+```
+
+### `agents plan` — Planning Workflow (MCP Decides Skills, Plan-First Approval)
+
+For non-code tasks (kanban, backlog, requirements, docs) the CLI never asks you to pick skills. MCP + Grok decide.
+
+```
+$ agents plan "read board.txt and improve requirement descriptions" --path .
+        --type auto
+CLI → POST /workflow/plan/create  (app/main.py:1360)
+        │
+        ▼
+GrokPlanner (app/llm/grok_planner.py:25)
+  - Builds catalog from SkillRegistry.list_for_planner() (124 skills with domain/complexity/inputs/outputs)
+  - Grok prompt: instruction + project files (kanban.txt) + catalog → JSON {analysis, steps[{skill, params, reason, depends_on, confidence}]}
+  - Smart fallback: if instruction contains kanban/backlog/requirement → BM25 on planning.* only
+  - Enriches empty params with scanned doc_files (absolute paths) — MCP decides, user does not
+
+Example plan for "read kanban.txt and improve card descriptions":
+  Step 1: planning.improve_descriptions  {source_file: /tmp/.../kanban.txt}  — BM25 matched planning.*
+  Step 2: planning.analyze_requirements  {source_files: [...]}               — depends_on [1]
+  Step 3: planning.identify_dependencies {source_file: ...}                  — depends_on [2]
+  Step 4: planning.generate_spec         {requirements_file: ...}            — depends_on [3]
+  Step 5: planning.generate_user_stories {source: ...}                       — depends_on [4]
+
+CLI shows Execution Plan table + Grok Analysis panel, asks:
+  Approve and execute this plan? [y/N]
+
+User → y → POST /workflow/plan/{id}/approve → POST /workflow/plan/{id}/execute
+        │
+        ▼
+MCP Orchestrator executes steps sequentially, checks depends_on, collects artifacts
+  → PlanningAgent (app/agents/planning_agent.py:6) runs each planning.* skill
+  → skills use LLM (Grok) when available, fallback to template otherwise
+
+Result: 5 artifacts
+  kanban-improved.txt  — rewritten cards with Given/When/Then ACs
+  REQUIREMENTS.md      — structured FR/NFR/constraints/risks
+  dependencies.md      — graph + critical path
+  SPEC.md              — full technical spec
+  user-stories.md      — INVEST stories
+
+You can also call MCP directly:
+  /mcp/orchestrate → tools: analyze_context, create_execution_plan, present_plan, approve_plan, execute_plan, get_plan_status
+  Resources: orchestrator://plans, orchestrator://skills
 ```
 
 ---
@@ -409,7 +542,7 @@ CLI → POST /workflow/scaffold
 
 | Agent | Skills | Focus |
 |-------|--------|-------|
-| `go` | 31 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi |
+| `go` | 35 | Go 1.24 microservices — Fiber, Gin, Gorilla, Echo, Chi (incl. Medical-App-Core) |
 | `backend` | 6 | Python/FastAPI — endpoints, SQLAlchemy, repository pattern, Docker |
 | `nextjs` | 25 | App Router, API routes, server actions, layouts, data fetching |
 | `design` | 17 | UI components, design systems, dark mode, accessibility |
@@ -417,29 +550,34 @@ CLI → POST /workflow/scaffold
 | `vercel` | 5 | Deployment, environment config, edge functions |
 | `diagnostic` | 3 | Error diagnosis and fix — Go, Next.js, Python |
 | `solid` | 5 | SOLID Principles analysis — architecture-level compliance enforcement |
+| `planning` | 6 | Requirements analysis, backlog refinement, user stories, estimation, dependencies, spec generation |
+| `design_patterns` | 4 | Creational / Structural / Behavioral / Enterprise patterns |
+| `quality_assessment` | 5 | Maintainability, extensibility, testability, scalability, security |
 
-**Total: 105 registered skills.** All skills work in rule-based (template) mode without an LLM. When `HUGGINGFACE_TOKEN`, `LLM_MODEL_1`, and `LLM_MODEL_2` are configured, the dual extractor calls both models in parallel and picks the best parameter set for each skill.
+**Total: 124 registered skills.** All skills work in rule-based (template) mode without an LLM. When `GROCK_API_TOKEN` is set, Grok (`grok-3`) is forced as primary; `HUGGINGFACE_TOKEN` + `LLM_MODEL_1/2` remain as fallback and for dual extraction.
 
 ---
 
 ## Intelligence Architecture
 
-No model runs inside this application. All LLM inference is delegated to the **Hugging Face Inference API** over HTTP, making the service deployable on minimal infrastructure (0.5 CPU / 512 MB RAM):
+No model runs inside this application. LLM inference is delegated over HTTP, with **Grok (xAI)** forced as primary when `GROCK_API_TOKEN` is set. Hugging Face remains as fallback. This keeps the service deployable on minimal infrastructure (0.5 CPU / 512 MB RAM):
 
 ```
-This application                          Hugging Face Inference API
-┌───────────────────────────────┐         ┌──────────────────────────────────────┐
-│  FastAPI                      │         │  LLM_MODEL_1                         │
-│  AgentOrchestrator            │──HTTP──▶│  meta-llama/Llama-3.1-8B-Instruct   │
-│  Architecture Pipeline        │         │  (general purpose)                   │
-│  100 Skills                   │         ├──────────────────────────────────────┤
-│  BM25 Skill Router            │──HTTP──▶│  LLM_MODEL_2                         │
-│  Dual LLM Extractor           │◀────────│  Qwen/Qwen2.5-Coder-7B-Instruct     │
-│  Intent Router                │         │  (code specialized)                  │
-│  Diagnostic Agent             │         └──────────────────────────────────────┘
-└───────────────────────────────┘
-  RAM: ~150–200 MB  |  LLM RAM: 0 (remote)
+This application                          xAI Grok API (forced)          Hugging Face (fallback)
+┌───────────────────────────────┐         ┌──────────────────────────┐    ┌──────────────────────────┐
+│  FastAPI                      │         │  GROK_MODEL=grok-3       │    │  LLM_MODEL_1             │
+│  AgentOrchestrator            │──HTTP──▶│  xAI /v1/chat/completions│    │  meta-llama/...          │
+│  GrokPlanner (MCP)            │         │  (planning + code)       │    │  LLM_MODEL_2             │
+│  124 Skills + Metadata        │         │  Token: GROCK_API_TOKEN  │    │  Qwen/...                │
+│  BM25 Skill Router            │         │  (never logged)          │    │  (parallel dual extract) │
+│  Dual LLM Extractor (Grok-first)│      └──────────────────────────┘    └──────────────────────────┘
+│  Intent Router                │                    ▲                               ▲
+│  Diagnostic Agent             │                    │ fallback on 403/429/timeout     │
+└───────────────────────────────┘                    └───────────────────────────────┘
+  RAM: ~150–200 MB  |  LLM RAM: 0 (remote) — Grok forced, HF on failure
 ```
+
+**Provider selection (`app/llm/factory.py`):** `GROCK_API_TOKEN` present → `GrokProvider` for `llm` and `go_llm`; otherwise `HuggingFaceProvider`. Token value is never logged (`***` masked) or returned in responses.
 
 ### Skill Routing — BM25 (zero cost, zero API calls)
 
@@ -1003,7 +1141,8 @@ When both **Microservices** and **Hexagonal** score ≥ 0.65 normalised *and* th
 ## Requirements
 
 - Python 3.12+
-- Hugging Face account — free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with **Inference** permission enabled
+- **Grok (xAI) account (primary, forced)** — create token at [console.x.ai](https://console.x.ai/) and set `GROCK_API_TOKEN` in `.env` (never commit the value). See `GROCK_API_TOKEN` in `.env` — the code reads it via `os.getenv` and never logs/returns it.
+- Hugging Face account (fallback) — free token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) with **Inference** permission enabled. Used only if `GROCK_API_TOKEN` is not set or Grok returns 403/429/timeout.
 
 ---
 
@@ -1024,7 +1163,14 @@ make install
 
 # 4. Configure environment
 cp .env.example .env
-# Edit .env — set HUGGINGFACE_TOKEN, LLM_MODEL_1, LLM_MODEL_2
+# Edit .env — set GROCK_API_TOKEN (primary, forced) and optionally HUGGINGFACE_TOKEN as fallback
+# Example .env (do not commit real values):
+# GROCK_API_TOKEN=xai-...
+# GROK_MODEL=grok-3
+# HUGGINGFACE_TOKEN=hf_...
+# LLM_MODEL_1=Qwen/Qwen2.5-Coder-32B-Instruct  # fallback
+# LLM_MODEL_2=openai/gpt-oss-120b
+# GROCK_API_TOKEN is read via os.getenv("GROCK_API_TOKEN") and never logged or returned in API responses
 ```
 
 ---
@@ -1157,15 +1303,18 @@ curl http://localhost:6000/mcp/quality-assessment
 
 | Variable | Default | Description |
 |---|---|---|
-| `HUGGINGFACE_TOKEN` | — | Hugging Face API token (Inference permission required) |
-| `LLM_MODEL_1` | `meta-llama/Llama-3.1-8B-Instruct` | General-purpose model — used in dual extraction |
-| `LLM_MODEL_2` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Code-specialized model — used in dual extraction |
+| `GROCK_API_TOKEN` | — | **Primary, forced.** xAI Grok API token. Set only on server `.env`. Read via `os.getenv("GROCK_API_TOKEN")` (`app/llm/grok.py:53`, `app/llm/factory.py:27`), masked as `xai***XXXX` in logs (`app/llm/grok.py:61`), never returned in responses. |
+| `GROK_MODEL` | `grok-3` | Grok model for general/planning/code. Alternatives: `grok-3-fast`, `grok-3-mini`, `grok-code-fast-1` (`app/llm/grok.py:10`) |
+| `GROK_API_BASE_URL` | `https://api.x.ai/v1` | xAI base URL (OpenAI-compatible) |
+| `HUGGINGFACE_TOKEN` | — | **Fallback.** Hugging Face API token (Inference permission required). Used only if `GROCK_API_TOKEN` missing or Grok returns 403/429/timeout |
+| `LLM_MODEL_1` | `meta-llama/Llama-3.1-8B-Instruct` | General-purpose model — used in dual extraction fallback |
+| `LLM_MODEL_2` | `Qwen/Qwen2.5-Coder-7B-Instruct` | Code-specialized model — used in dual extraction fallback |
 | `LLM_MAX_TOKENS` | `4096` | Maximum output tokens per request |
 | `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
-| `API_HOST` | `0.0.0.0` | Server bind address |
-| `API_PORT` | `3030` | Server port |
-| `API_BASE_URL` | — | Public URL of this service (injected into the CLI install script) |
-| `AGENTS_API_URL` | — | URL the CLI binary uses to reach the API |
+| `API_HOST` | `0.0.0.0` | Server bind address — must be `0.0.0.0`, not `localhost:6000` (`app/main.py:1529`) |
+| `API_PORT` | `3030` | Server port (`API_PORT=6000` for local, `3443` for `make dev` in `Makefile:8`) |
+| `API_BASE_URL` | — | Public URL of this service (injected into the CLI install script at `app/cli/install.sh:4`) |
+| `AGENTS_API_URL` | — | URL the CLI binary uses to reach the API (baked at build via `app/cli/_build_config.py`) |
 
 ### Recommended Models
 

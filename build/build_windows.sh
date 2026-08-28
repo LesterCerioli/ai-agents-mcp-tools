@@ -30,9 +30,13 @@ pyinstaller \
   --hidden-import app.cli.platforms.linux \
   --hidden-import app.cli.platforms.windows \
   --hidden-import app.cli.client \
+  --hidden-import app.llm.grok \
+  --hidden-import app.llm.grok_analyzer \
+  --hidden-import app.llm.factory \
   --hidden-import rich \
   --hidden-import httpx \
   --hidden-import typer \
   app/cli/commands.py
 
 echo "Done: $DIST/agents-windows.exe"
+echo "Grok + Skills integrated — GROCK_API_TOKEN será lido no servidor, nunca exposto no binário."

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import ClassVar
 
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
@@ -60,6 +61,7 @@ def _has_cycle(edges: list[tuple[str, str]]) -> bool:
 class SolutionArchitectureValidationAgent(BaseArchitectureAgent):
 
     name = "solution_architecture_validation"
+    capabilities: ClassVar[list[str]] = ["solution_validation"]
     description = (
         "Cross-checks the generated solution architecture (flow diagram + decision) against "
         "the original parsed business requirements. Acts as the quality gate of the Solution "

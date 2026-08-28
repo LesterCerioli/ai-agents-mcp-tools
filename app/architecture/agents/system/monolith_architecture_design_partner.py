@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from app.architecture.agents.base import BaseArchitectureAgent
 from app.architecture.context.pipeline_context import PipelineContext
 from app.architecture.schemas.requirements import ArchitectureRequirements
@@ -318,6 +320,7 @@ def _deployment_strategy(req: ArchitectureRequirements) -> str:
 class MonolithArchitectureDesignPartnerAgent(BaseArchitectureAgent):
 
     name = "monolith_architecture_design_partner"
+    capabilities: ClassVar[list[str]] = ["monolith_architecture_design", "monolith_design"]
     description = (
         "Produces a full Modular Monolith Architecture Design from a solution flow diagram, "
         "architecture decision, and requirements. Defines DDD bounded context module boundaries, "
